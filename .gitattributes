@@ -1,0 +1,9 @@
+# https://git-scm.com/docs/gitattributes
+
+* text=auto
+
+*.bat text eol=crlf
+*.sh  text eol=lf
+
+*.txt text
+*.md  text
