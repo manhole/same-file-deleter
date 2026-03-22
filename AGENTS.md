@@ -1,53 +1,54 @@
-# Repository Guidelines
+# リポジトリガイドライン
 
-## Project Structure & Module Organization
-This repository is a Go CLI project for comparing two directories and deleting duplicates from B based on A.
+AIエージェントおよび開発者向けのガイドラインです。
+このリポジトリでコードを変更する際は、以下の規約に従ってください。
 
-- `cmd/sfd/main.go`: CLI entrypoint (`index`, `plan`, `apply`).
-- `internal/app/`: use cases and command-level orchestration.
-- `internal/domain/`: core models and matching rules.
-- `internal/infra/`: filesystem walking, JSONL I/O, hashing, path safety.
-- `internal/*/*_test.go`: unit and integration-style tests.
-- `DESIGN.md`, `ARCHITECTURE.md`: product and architecture decisions.
+## プロジェクト構成とモジュール構造
 
-Keep new code inside the existing `internal/{app,domain,infra}` layering unless a clear boundary change is required.
+ディレクトリAとBを比較し、B側の重複ファイルを削除するGo製CLIツールです。
 
-## Build, Test, and Development Commands
-- `go build ./cmd/sfd`  
-Builds the CLI binary.
-- `go run ./cmd/sfd --help`  
-Runs the tool locally.
-- `go test ./...`  
-Runs all tests.
-- `gofmt -w $(rg --files -g '*.go')`  
-Formats all Go files.
+- `cmd/sfd/main.go`: CLIエントリーポイント（`index`, `plan`, `apply`）
+- `internal/app/`: ユースケースとコマンドレベルのオーケストレーション
+- `internal/domain/`: コアモデルと一致判定ルール
+- `internal/infra/`: ファイルシステム走査、JSONL I/O、ハッシュ計算、パス安全性
+- `internal/*/*_test.go`: 単体テストおよび結合テスト
+- `DESIGN.md`, `ARCHITECTURE.md`: 機能設計と実装設計
 
-Example flow:
-`sfd index --dir /data/A --out A.checksums.jsonl`  
-`sfd plan --a A.checksums.jsonl --b B.checksums.jsonl --out plan.jsonl`  
-`sfd apply --plan plan.jsonl --execute`
+新しいコードは、明確な境界変更が必要でない限り、既存の `internal/{app,domain,infra}` のレイヤ構造に従って配置してください。
 
-## Coding Style & Naming Conventions
-- Follow standard Go style; always run `gofmt`.
-- Package names are lowercase and concise (`app`, `domain`, `infra`).
-- Use descriptive file names by role (e.g., `index_usecase.go`, `jsonl_reader.go`).
-- Prefer explicit error wrapping (`fmt.Errorf("context: %w", err)`).
-- Keep CLI behavior deterministic and safety-first (`dry-run` default, explicit `--execute`).
+## ビルド・テスト・開発コマンド
 
-## Testing Guidelines
-- Use Go’s built-in `testing` package.
-- Name tests `TestXxx` and keep them close to the package under test.
-- Add/adjust tests for every behavior change, especially:
-  - path safety (`EnsureWithinRoot`)
-  - index/update behavior
-  - end-to-end `index -> plan -> apply` flow
+詳細は [DEVELOPER.md](DEVELOPER.md) を参照してください。主なコマンドは以下の通りです。
 
-## Commit & Pull Request Guidelines
-- Use short, imperative commit messages (seen in history):  
-  - `Add architecture design for Go-based MVP`  
+- `go build ./cmd/sfd` — CLIバイナリのビルド
+- `go run ./cmd/sfd --help` — ローカル実行
+- `go test ./...` — 全テストの実行
+- `gofmt -w $(go list -f '{{.Dir}}' ./...)` — 全Goファイルのフォーマット
+
+## コーディングスタイルと命名規則
+
+- 標準Goスタイルに従い、常に `gofmt` を実行する
+- パッケージ名は小文字かつ簡潔（`app`, `domain`, `infra`）
+- ファイル名は役割で命名（例: `index_usecase.go`, `jsonl_reader.go`）
+- エラーは明示的にラップする（`fmt.Errorf("context: %w", err)`）
+- CLIの動作は決定論的かつ安全優先（`dry-run` 既定、`--execute` 明示）
+
+## テストガイドライン
+
+- Go標準の `testing` パッケージを使用する
+- テスト名は `TestXxx` 形式とし、テスト対象パッケージの近くに配置する
+- 以下の動作変更には必ずテストを追加/修正する:
+  - パス安全性（`EnsureWithinRoot`）
+  - index/updateの動作
+  - エンドツーエンドの `index -> plan -> apply` フロー
+
+## コミット・プルリクエストガイドライン
+
+- コミットメッセージは短い命令形（英語）で記述する:
+  - `Add architecture design for Go-based MVP`
   - `Finalize design decisions for A/B checksum workflow`
-- PRs should include:
-  - purpose and scope
-  - key design/behavior changes
-  - test evidence (`go test ./...`)
-  - any risk notes (file deletion, path validation, backward compatibility)
+- PRには以下を含める:
+  - 目的とスコープ
+  - 主要な設計・動作変更
+  - テスト結果（`go test ./...`）
+  - リスク事項（ファイル削除、パス検証、後方互換性）
