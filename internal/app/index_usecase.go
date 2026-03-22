@@ -79,6 +79,8 @@ func (uc IndexUseCase) Run(params IndexParams) (IndexSummary, error) {
 		uc.logf("index error: %s: %v\n", path, err)
 	}
 
+	// TODO: parallelize hash computation with a worker pool (runtime.NumCPU() workers).
+	// Currently runs single-threaded. See ARCHITECTURE.md §7 for the planned design.
 	err = infra.WalkFiles(absDir, params.Excludes, func(file infra.WalkFile) error {
 		summary.Scanned++
 		checksum := ""
