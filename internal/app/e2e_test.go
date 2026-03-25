@@ -129,6 +129,174 @@ func TestIndexUpdateReusesChecksum(t *testing.T) {
 	}
 }
 
+func TestSelfDedupBasic(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "D")
+
+	mustWriteFile(t, filepath.Join(dir, "a", "photo.jpg"), "image-data")
+	mustWriteFile(t, filepath.Join(dir, "b", "copy.jpg"), "image-data") // 重複
+	mustWriteFile(t, filepath.Join(dir, "c", "unique.txt"), "unique")
+
+	indexPath := filepath.Join(tmp, "D.checksums.jsonl")
+	planPath := filepath.Join(tmp, "D.plan.jsonl")
+
+	indexUC := app.IndexUseCase{}
+	if _, err := indexUC.Run(app.IndexParams{Dir: dir, Out: indexPath}); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	planUC := app.PlanUseCase{}
+	planSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: indexPath,
+		Out:        planPath,
+		Self:       true,
+	})
+	if err != nil {
+		t.Fatalf("plan --self failed: %v", err)
+	}
+	if planSummary.Matches != 1 {
+		t.Fatalf("expected 1 match, got %d", planSummary.Matches)
+	}
+
+	dupPath := filepath.Join(dir, "b", "copy.jpg")
+	keepPath := filepath.Join(dir, "a", "photo.jpg")
+
+	// dry-run: ファイルは削除されない
+	var dryOut bytes.Buffer
+	applyUC := app.ApplyUseCase{Stdout: &dryOut}
+	drySummary, err := applyUC.Run(app.ApplyParams{PlanPath: planPath, Execute: false})
+	if err != nil {
+		t.Fatalf("apply dry-run failed: %v", err)
+	}
+	if drySummary.Candidates != 1 || drySummary.Deleted != 0 {
+		t.Fatalf("unexpected dry-run summary: %+v", drySummary)
+	}
+	if _, err := os.Stat(dupPath); err != nil {
+		t.Fatalf("duplicate should remain after dry-run: %v", err)
+	}
+
+	// execute: 重複ファイルだけ削除される
+	execSummary, err := applyUC.Run(app.ApplyParams{PlanPath: planPath, Execute: true})
+	if err != nil {
+		t.Fatalf("apply execute failed: %v", err)
+	}
+	if execSummary.Deleted != 1 {
+		t.Fatalf("expected 1 deleted, got %+v", execSummary)
+	}
+	if _, err := os.Stat(dupPath); !os.IsNotExist(err) {
+		t.Fatalf("duplicate should be deleted, stat err=%v", err)
+	}
+	if _, err := os.Stat(keepPath); err != nil {
+		t.Fatalf("kept file should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "c", "unique.txt")); err != nil {
+		t.Fatalf("unique file should remain: %v", err)
+	}
+}
+
+func TestSelfDedupThreeWay(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "D")
+
+	mustWriteFile(t, filepath.Join(dir, "a", "x.txt"), "dup-content")
+	mustWriteFile(t, filepath.Join(dir, "b", "x.txt"), "dup-content")
+	mustWriteFile(t, filepath.Join(dir, "c", "x.txt"), "dup-content")
+
+	indexPath := filepath.Join(tmp, "D.checksums.jsonl")
+	planPath := filepath.Join(tmp, "D.plan.jsonl")
+
+	indexUC := app.IndexUseCase{}
+	if _, err := indexUC.Run(app.IndexParams{Dir: dir, Out: indexPath}); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	planUC := app.PlanUseCase{}
+	planSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: indexPath,
+		Out:        planPath,
+		Self:       true,
+	})
+	if err != nil {
+		t.Fatalf("plan --self failed: %v", err)
+	}
+	// 3件のうち1件（辞書順最小のa/x.txt）を残し、残り2件が候補
+	if planSummary.Matches != 2 {
+		t.Fatalf("expected 2 matches, got %d", planSummary.Matches)
+	}
+
+	applyUC := app.ApplyUseCase{Stdout: &bytes.Buffer{}}
+	execSummary, err := applyUC.Run(app.ApplyParams{PlanPath: planPath, Execute: true})
+	if err != nil {
+		t.Fatalf("apply execute failed: %v", err)
+	}
+	if execSummary.Deleted != 2 {
+		t.Fatalf("expected 2 deleted, got %+v", execSummary)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a", "x.txt")); err != nil {
+		t.Fatalf("kept file a/x.txt should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "b", "x.txt")); !os.IsNotExist(err) {
+		t.Fatalf("b/x.txt should be deleted")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "c", "x.txt")); !os.IsNotExist(err) {
+		t.Fatalf("c/x.txt should be deleted")
+	}
+}
+
+func TestSelfDedupNoDuplicates(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "D")
+
+	mustWriteFile(t, filepath.Join(dir, "a.txt"), "content-a")
+	mustWriteFile(t, filepath.Join(dir, "b.txt"), "content-b")
+
+	indexPath := filepath.Join(tmp, "D.checksums.jsonl")
+	planPath := filepath.Join(tmp, "D.plan.jsonl")
+
+	indexUC := app.IndexUseCase{}
+	if _, err := indexUC.Run(app.IndexParams{Dir: dir, Out: indexPath}); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	planUC := app.PlanUseCase{}
+	planSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: indexPath,
+		Out:        planPath,
+		Self:       true,
+	})
+	if err != nil {
+		t.Fatalf("plan --self failed: %v", err)
+	}
+	if planSummary.Matches != 0 {
+		t.Fatalf("expected 0 matches, got %d", planSummary.Matches)
+	}
+}
+
+func TestSelfDedupWithBIsError(t *testing.T) {
+	planUC := app.PlanUseCase{}
+	_, err := planUC.Run(app.PlanParams{
+		AIndexPath: "a.jsonl",
+		BIndexPath: "b.jsonl",
+		Out:        "plan.jsonl",
+		Self:       true,
+	})
+	if err == nil || !app.IsInputError(err) {
+		t.Fatalf("expected InputError when --self and --b are both set, got: %v", err)
+	}
+}
+
+func TestSelfDedupWithoutSelfAndNoBIsError(t *testing.T) {
+	planUC := app.PlanUseCase{}
+	_, err := planUC.Run(app.PlanParams{
+		AIndexPath: "a.jsonl",
+		Out:        "plan.jsonl",
+		Self:       false,
+	})
+	if err == nil || !app.IsInputError(err) {
+		t.Fatalf("expected InputError when --b is missing and --self is not set, got: %v", err)
+	}
+}
+
 func mustMkdirAll(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {

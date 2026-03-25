@@ -28,6 +28,11 @@
 3. **安全重視の削除運用**:
    - 削除対象の確定は常にplan file経由で行い、いきなり比較結果を削除へ直結しない。
    - 実削除前にdry-runを標準手順とし、誤削除時の影響を減らす。
+4. **単一ディレクトリ内の重複削除（自己重複検出）**:
+   - `sfd index --dir ~/photos --out photos.jsonl` でインデックスを作成する。
+   - `sfd plan --a photos.jsonl --self --out dup-plan.jsonl` でA内の重複を検出する。
+   - `sfd apply --plan dup-plan.jsonl --execute` で重複ファイルを削除する。
+   - 同一チェックサム+サイズのグループからパス辞書順最小のファイルを1件残し、残りを削除候補にする。
 
 ## 4. スコープ
 
@@ -43,8 +48,9 @@
 1. 指定ディレクトリのchecksum index fileを作成/更新できる
 2. A用とB用のchecksum index fileを比較し、B側の削除候補を抽出できる
 3. B側で一致ファイルが複数ある場合は、該当ファイルをすべて削除対象にできる
-4. plan fileを使ってB側のファイルを削除できる
+4. plan fileを使ってファイルを削除できる
 5. 削除前にドライランで確認できる
+6. 単一ディレクトリ内の重複ファイルを検出し、1ファイルを残して他を削除候補にできる
 
 ### 5.2 非機能要件
 
@@ -78,9 +84,10 @@ sfd index --dir /data/B --out .cache/B.checksums.jsonl
 
 ### 6.2 `sfd plan`
 
-A/Bのchecksum index fileを比較し、削除候補planを作る。
+checksum index fileを比較し、削除候補planを作る。2つのモードがある。
 
-例:
+**A/B比較モード**: AにあるファイルをBから削除する。
+
 ```bash
 sfd plan \
   --a .cache/A.checksums.jsonl \
@@ -88,10 +95,20 @@ sfd plan \
   --out .cache/A_to_B.delete-plan.jsonl
 ```
 
+**自己重複検出モード（`--self`）**: A内の重複ファイルを検出する。
+
+```bash
+sfd plan \
+  --a .cache/A.checksums.jsonl \
+  --self \
+  --out .cache/A.dedup-plan.jsonl
+```
+
 主なオプション:
-- `--a <file>`: A側checksum index file
-- `--b <file>`: B側checksum index file
-- `--out <path>`: plan出力
+- `--a <file>`: A側checksum index file（必須）
+- `--b <file>`: B側checksum index file（A/B比較モードのみ、`--self` と排他）
+- `--self`: 自己重複検出モード。同一チェックサム+サイズのグループからパス辞書順最小を残し残りを削除候補にする
+- `--out <path>`: plan出力（必須）
 
 ### 6.3 `sfd apply`
 
@@ -154,10 +171,20 @@ sfd apply --plan .cache/A_to_B.delete-plan.jsonl --execute
 
 ### 8.2 plan処理
 
+**A/B比較モード:**
+
 1. A-indexを読み、`(algo, checksum, size)` をキーに集合化
 2. B-indexを走査し、同キーがA集合にあれば削除候補としてplanへ出力
 3. 同一キーに該当するB側ファイルはすべてplanへ出力
 4. 統計情報を出力（対象件数、合計サイズ、スキップ件数）
+
+**自己重複検出モード（`--self`）:**
+
+1. A-indexを全ロードし、`(algo, checksum, size)` をキーにグループ化
+2. 2件以上のグループを重複と判定
+3. 各グループでパス辞書順最小のファイルを残し、残りを削除候補としてplanへ出力
+4. PlanRecordの `b_root` にはAのルートディレクトリを設定する（applyはこれを使って削除パスを構築する）
+5. 統計情報を出力
 
 ### 8.3 apply処理
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"same-file-deleter/internal/domain"
@@ -15,6 +16,7 @@ type PlanParams struct {
 	AIndexPath string
 	BIndexPath string
 	Out        string
+	Self       bool
 }
 
 type PlanSummary struct {
@@ -34,11 +36,19 @@ func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
 	if strings.TrimSpace(params.AIndexPath) == "" {
 		return summary, NewInputErrorf("--a is required")
 	}
-	if strings.TrimSpace(params.BIndexPath) == "" {
-		return summary, NewInputErrorf("--b is required")
-	}
 	if strings.TrimSpace(params.Out) == "" {
 		return summary, NewInputErrorf("--out is required")
+	}
+
+	if params.Self {
+		if strings.TrimSpace(params.BIndexPath) != "" {
+			return summary, NewInputErrorf("--self and --b are mutually exclusive")
+		}
+		return uc.runSelf(params)
+	}
+
+	if strings.TrimSpace(params.BIndexPath) == "" {
+		return summary, NewInputErrorf("--b is required")
 	}
 
 	aKeys := make(map[domain.MatchKey]struct{})
@@ -86,6 +96,53 @@ func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
 			return summary, err
 		}
 		return summary, classifyIndexReadError("--b", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		return summary, err
+	}
+	return summary, nil
+}
+
+func (uc PlanUseCase) runSelf(params PlanParams) (PlanSummary, error) {
+	summary := PlanSummary{}
+
+	groups := make(map[domain.MatchKey][]domain.IndexRecord)
+	if err := infra.ReadIndexJSONL(params.AIndexPath, func(rec domain.IndexRecord) error {
+		summary.ARecords++
+		key := domain.MatchKeyFromIndex(rec)
+		groups[key] = append(groups[key], rec)
+		return nil
+	}); err != nil {
+		return summary, classifyIndexReadError("--a", err)
+	}
+	summary.BRecords = summary.ARecords
+
+	writer, err := infra.NewJSONLAtomicWriter(params.Out)
+	if err != nil {
+		return summary, err
+	}
+	defer writer.Abort()
+
+	for _, recs := range groups {
+		if len(recs) < 2 {
+			continue
+		}
+		sort.Slice(recs, func(i, j int) bool { return recs[i].Path < recs[j].Path })
+		for _, rec := range recs[1:] { // recs[0] は keep
+			plan := domain.PlanRecord{
+				BRoot:    rec.Root,
+				Path:     rec.Path,
+				Reason:   domain.PlanReasonSelfDuplicate,
+				Checksum: rec.Checksum,
+				Size:     rec.Size,
+			}
+			if err := writer.Write(plan); err != nil {
+				return summary, fmt.Errorf("write plan record: %w", err)
+			}
+			summary.Matches++
+			summary.MatchBytes += rec.Size
+		}
 	}
 
 	if err := writer.Commit(); err != nil {

@@ -78,11 +78,21 @@ internal/
 
 ### 6.2 `sfd plan`
 
+**A/B比較モード（`--b` 指定時）:**
+
 1. 引数検証（`--a`, `--b`, `--out` 必須）
 2. Aのindexを読み、`MatchKey` の集合を構築
 3. Bのindexをストリーム読み込みし、キー一致行をplanへ書き出し
 4. 一致したBレコードはすべて出力（重複ファイルを含む）
 5. サマリ出力（一致件数、一致合計サイズ）
+
+**自己重複検出モード（`--self` 指定時）:**
+
+1. 引数検証（`--a`, `--out` 必須。`--b` は禁止）
+2. Aのindexを全ロードし、`MatchKey -> []IndexRecord` のマップを構築
+3. 2件以上のグループを重複と判定
+4. 各グループでパス辞書順最小を keep とし、残りを `PlanRecord{b_root=A_root, reason="self_duplicate"}` として出力
+5. サマリ出力
 
 ### 6.3 `sfd apply`
 
@@ -102,7 +112,8 @@ internal/
 - `plan`/`apply` はストリーム処理中心で、I/O優位のため単純実装を優先。
 - メモリ使用:
   - `index --update`: 既存indexを `path` キーで保持（O(files_in_dir)）
-  - `plan`: A側キー集合のみ保持（O(files_in_A)）
+  - `plan` A/B比較モード: A側キー集合のみ保持（O(files_in_A)）
+  - `plan --self`: A-index全体を `MatchKey -> []IndexRecord` マップとして保持（O(files_in_A)、パス文字列も含む）
 
 ## 8. パス安全性
 

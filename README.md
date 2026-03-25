@@ -1,7 +1,10 @@
 # same-file-deleter
 
-`same-file-deleter` はディレクトリAとBを比較し、内容が一致するファイルをBから削除するためのツールです。
+`same-file-deleter` はファイルの内容（チェックサム）を使って重複ファイルを検出・削除するツールです。
 運用は `index -> plan -> apply` の3ステップで行います。
+
+- **A/B比較モード**: ディレクトリAとBを比較し、Aにある内容と一致するファイルをBから削除する
+- **自己重複検出モード（`--self`）**: ディレクトリA内の重複ファイルを検出し、1ファイルを残して他を削除する
 
 ## インストール
 
@@ -35,9 +38,19 @@ sfd index --dir /path/B --out B.checksums.jsonl --update
 
 ### 2. 削除候補を作成する
 
+**A/B比較モード**: AにあるファイルをBから削除する場合
+
 ```bash
 sfd plan --a A.checksums.jsonl --b B.checksums.jsonl --out delete-plan.jsonl
 ```
+
+**自己重複検出モード**: A内の重複ファイルを削除する場合
+
+```bash
+sfd plan --a A.checksums.jsonl --self --out delete-plan.jsonl
+```
+
+`--self` モードでは、同一内容のファイルグループからパス辞書順で最小のファイルを残し、残りを削除候補にします。
 
 ### 3. 候補を確認し、実行する
 
@@ -51,7 +64,7 @@ sfd apply --plan delete-plan.jsonl --execute
 - `apply` は既定でdry-run（削除なし）。`--execute` を明示した場合のみ削除します
 - `--max-delete <n>` を指定すると、削除候補がn件を超えた場合に停止します（誤操作防止）
 - `.git` は除外、シンボリックリンクは対象外
-- B側で一致が複数ある場合は全件を削除候補化
+- 一致ファイルが複数ある場合は全件を削除候補化
 
 ## 開発者向け情報
 

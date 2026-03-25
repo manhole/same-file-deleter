@@ -94,6 +94,7 @@ func runPlan(args []string) int {
 	a := fs.String("a", "", "A index jsonl path")
 	b := fs.String("b", "", "B index jsonl path")
 	out := fs.String("out", "", "output plan jsonl path")
+	self := fs.Bool("self", false, "detect duplicates within a single directory (requires --a, mutually exclusive with --b)")
 
 	if err := fs.Parse(args); err != nil {
 		printPlanUsage(os.Stderr)
@@ -112,6 +113,7 @@ func runPlan(args []string) int {
 		AIndexPath: *a,
 		BIndexPath: *b,
 		Out:        *out,
+		Self:       *self,
 	})
 	if err != nil {
 		return reportError(err)
@@ -192,6 +194,7 @@ func printIndexUsage(w io.Writer) {
 
 func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: sfd plan --a <A.checksums.jsonl> --b <B.checksums.jsonl> --out <delete-plan.jsonl>")
+	fmt.Fprintln(w, "       sfd plan --a <A.checksums.jsonl> --self --out <delete-plan.jsonl>")
 }
 
 func printApplyUsage(w io.Writer) {
