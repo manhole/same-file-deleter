@@ -72,6 +72,9 @@ func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
 		if _, ok := aKeys[key]; !ok {
 			return nil
 		}
+		if isInRecycleBin(rec.Path) {
+			return nil
+		}
 
 		if strings.TrimSpace(rec.Root) == "" {
 			return NewInputErrorf("B index record missing root for path: %s", rec.Path)
@@ -128,8 +131,19 @@ func (uc PlanUseCase) runSelf(params PlanParams) (PlanSummary, error) {
 		if len(recs) < 2 {
 			continue
 		}
-		sort.Slice(recs, func(i, j int) bool { return recs[i].Path < recs[j].Path })
-		for _, rec := range recs[1:] { // recs[0] は keep
+		// #recycle 内のファイルは常に削除候補から除外する。
+		// #recycle 外のファイルが 2 件以上あるときのみ削除候補を抽出する。
+		var outside []domain.IndexRecord
+		for _, rec := range recs {
+			if !isInRecycleBin(rec.Path) {
+				outside = append(outside, rec)
+			}
+		}
+		if len(outside) < 2 {
+			continue
+		}
+		sort.Slice(outside, func(i, j int) bool { return outside[i].Path < outside[j].Path })
+		for _, rec := range outside[1:] { // outside[0] は keep
 			plan := domain.PlanRecord{
 				BRoot:    rec.Root,
 				Path:     rec.Path,
@@ -149,6 +163,15 @@ func (uc PlanUseCase) runSelf(params PlanParams) (PlanSummary, error) {
 		return summary, err
 	}
 	return summary, nil
+}
+
+func isInRecycleBin(path string) bool {
+	for _, part := range strings.Split(path, "/") {
+		if part == "#recycle" {
+			return true
+		}
+	}
+	return false
 }
 
 func classifyIndexReadError(flagName string, err error) error {

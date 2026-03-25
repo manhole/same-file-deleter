@@ -175,7 +175,7 @@ sfd apply --plan .cache/A_to_B.delete-plan.jsonl --execute
 
 1. A-indexを読み、`(algo, checksum, size)` をキーに集合化
 2. B-indexを走査し、同キーがA集合にあれば削除候補としてplanへ出力
-3. 同一キーに該当するB側ファイルはすべてplanへ出力
+3. 同一キーに該当するB側ファイルはすべてplanへ出力（ただし `#recycle` 内は除く）
 4. 統計情報を出力（対象件数、合計サイズ、スキップ件数）
 
 **自己重複検出モード（`--self`）:**
@@ -185,6 +185,12 @@ sfd apply --plan .cache/A_to_B.delete-plan.jsonl --execute
 3. 各グループでパス辞書順最小のファイルを残し、残りを削除候補としてplanへ出力
 4. PlanRecordの `b_root` にはAのルートディレクトリを設定する（applyはこれを使って削除パスを構築する）
 5. 統計情報を出力
+
+`#recycle` フォルダの扱い（Synology NAS のごみ箱）:
+- `#recycle` 内のファイルは常に削除候補にしない
+- グループ内に `#recycle` 内のファイルが含まれる場合、`#recycle` **外**のファイルが2件以上あるときのみ削除候補を抽出する
+  - 例: `#recycle`内1件 + 外1件 → 削除なし
+  - 例: `#recycle`内1件 + 外2件 → 外の1件を削除候補にする
 
 ### 8.3 apply処理
 
