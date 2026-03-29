@@ -10,6 +10,9 @@ import (
 	"same-file-deleter/internal/app"
 )
 
+// version は ldflags で注入する。例: go build -ldflags="-X main.version=1.2.3"
+var version = "dev"
+
 type multiStringFlag []string
 
 func (m *multiStringFlag) String() string {
@@ -32,6 +35,9 @@ func run(args []string) int {
 	}
 
 	switch args[0] {
+	case "version", "--version", "-version":
+		fmt.Fprintf(os.Stdout, "sfd version %s\n", version)
+		return 0
 	case "index":
 		return runIndex(args[1:])
 	case "plan":

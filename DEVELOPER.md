@@ -49,10 +49,35 @@ gofmt -w $(go list -f '{{.Dir}}' ./...)
 
 ## ビルドする
 
+git タグがバージョンの唯一の情報源です。ビルド時に自動で埋め込まれます。
+
 ```bash
 cd /path/to/same-file-deleter
+go build -ldflags="-X main.version=$(git describe --tags --always)" ./cmd/sfd
+./sfd version
+```
+
+タグがない場合やタグ後にコミットがある場合は、コミットハッシュを含む文字列になります:
+
+```
+v1.2.3          ← タグと一致するコミット
+v1.2.3-3-gabc1234  ← タグ後に3コミット
+abc1234         ← タグなし
+```
+
+`-ldflags` なしでビルドすると `dev` と表示されます。
+
+```bash
 go build ./cmd/sfd
-./sfd --help
+./sfd version   # → sfd version dev
+```
+
+## リリース手順
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+# あとはビルド時に git describe が v1.2.3 を返す
 ```
 
 生成された `sfd` バイナリを `~/bin` などに置けば、通常のコマンドとして利用できます。
