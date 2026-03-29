@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"same-file-deleter/internal/app"
+	"same-file-deleter/internal/domain"
+	"same-file-deleter/internal/infra"
 )
 
 func TestIndexPlanApplyEndToEnd(t *testing.T) {
@@ -145,7 +148,8 @@ func TestSelfDedupBasic(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	planUC := app.PlanUseCase{}
+	var planStdout bytes.Buffer
+	planUC := app.PlanUseCase{Stdout: &planStdout}
 	planSummary, err := planUC.Run(app.PlanParams{
 		AIndexPath: indexPath,
 		Out:        planPath,
@@ -156,6 +160,25 @@ func TestSelfDedupBasic(t *testing.T) {
 	}
 	if planSummary.Matches != 1 {
 		t.Fatalf("expected 1 match, got %d", planSummary.Matches)
+	}
+
+	// plan JSONL の kept_path が "a/photo.jpg" であることを確認
+	if err := infra.ReadPlanJSONL(planPath, func(rec domain.PlanRecord) error {
+		if rec.KeptPath != "a/photo.jpg" {
+			t.Errorf("expected KeptPath=a/photo.jpg, got %q", rec.KeptPath)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("read plan jsonl failed: %v", err)
+	}
+
+	// stdout にグループ情報が含まれることを確認
+	out := planStdout.String()
+	if !strings.Contains(out, "a/photo.jpg [keep]") {
+		t.Errorf("stdout should contain keep line, got:\n%s", out)
+	}
+	if !strings.Contains(out, "delete: b/copy.jpg") {
+		t.Errorf("stdout should contain delete line, got:\n%s", out)
 	}
 
 	dupPath := filepath.Join(dir, "b", "copy.jpg")
@@ -210,7 +233,7 @@ func TestSelfDedupThreeWay(t *testing.T) {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	planUC := app.PlanUseCase{}
+	planUC := app.PlanUseCase{Stdout: &bytes.Buffer{}}
 	planSummary, err := planUC.Run(app.PlanParams{
 		AIndexPath: indexPath,
 		Out:        planPath,
@@ -222,6 +245,16 @@ func TestSelfDedupThreeWay(t *testing.T) {
 	// 3件のうち1件（辞書順最小のa/x.txt）を残し、残り2件が候補
 	if planSummary.Matches != 2 {
 		t.Fatalf("expected 2 matches, got %d", planSummary.Matches)
+	}
+
+	// 削除レコード2件すべての KeptPath が "a/x.txt" であることを確認
+	if err := infra.ReadPlanJSONL(planPath, func(rec domain.PlanRecord) error {
+		if rec.KeptPath != "a/x.txt" {
+			t.Errorf("expected KeptPath=a/x.txt, got %q", rec.KeptPath)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("read plan jsonl failed: %v", err)
 	}
 
 	applyUC := app.ApplyUseCase{Stdout: &bytes.Buffer{}}
@@ -390,6 +423,41 @@ func TestSelfDedupDeletesExtraOutsideWithRecycleBin(t *testing.T) {
 	// #recycle は触らない
 	if _, err := os.Stat(filepath.Join(dir, "#recycle", "photo.jpg")); err != nil {
 		t.Fatalf("#recycle/photo.jpg should remain: %v", err)
+	}
+}
+
+func TestSelfDedupPlanOutput(t *testing.T) {
+	// plan --self の stdout にグループ情報（[keep] / delete:）が出力されることを確認
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "D")
+
+	mustWriteFile(t, filepath.Join(dir, "a", "x.txt"), "dup")
+	mustWriteFile(t, filepath.Join(dir, "b", "x.txt"), "dup")
+	mustWriteFile(t, filepath.Join(dir, "c", "x.txt"), "dup")
+
+	indexPath := filepath.Join(tmp, "D.checksums.jsonl")
+	planPath := filepath.Join(tmp, "D.plan.jsonl")
+
+	if _, err := (app.IndexUseCase{}).Run(app.IndexParams{Dir: dir, Out: indexPath}); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	planUC := app.PlanUseCase{Stdout: &stdout}
+	if _, err := planUC.Run(app.PlanParams{AIndexPath: indexPath, Out: planPath, Self: true}); err != nil {
+		t.Fatalf("plan failed: %v", err)
+	}
+
+	out := stdout.String()
+	// keep ファイル（辞書順最小）と delete ファイル2件がグループ出力される
+	if !strings.Contains(out, "a/x.txt [keep]") {
+		t.Errorf("stdout should contain keep line, got:\n%s", out)
+	}
+	if !strings.Contains(out, "delete: b/x.txt") {
+		t.Errorf("stdout should contain delete b/x.txt, got:\n%s", out)
+	}
+	if !strings.Contains(out, "delete: c/x.txt") {
+		t.Errorf("stdout should contain delete c/x.txt, got:\n%s", out)
 	}
 }
 

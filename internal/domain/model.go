@@ -40,6 +40,7 @@ type PlanRecord struct {
 	Reason   string `json:"reason"`
 	Checksum string `json:"checksum"`
 	Size     int64  `json:"size"`
+	KeptPath string `json:"kept_path,omitempty"` // --self モードで残すファイルの相対パス
 }
 
 func (r PlanRecord) Validate() error {

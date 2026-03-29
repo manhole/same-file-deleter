@@ -108,6 +108,7 @@ func runPlan(args []string) int {
 
 	uc := app.PlanUseCase{
 		Stderr: os.Stderr,
+		Stdout: os.Stdout,
 	}
 	summary, err := uc.Run(app.PlanParams{
 		AIndexPath: *a,

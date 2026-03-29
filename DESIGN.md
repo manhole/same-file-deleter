@@ -146,9 +146,19 @@ sfd apply --plan .cache/A_to_B.delete-plan.jsonl --execute
 
 ### 7.2 planレコード例
 
+A/B 比較モード:
+
 ```json
 {"b_root":"/data/B","path":"sub/x.txt","reason":"checksum_match_with_A","checksum":"ab12...","size":1234}
 ```
+
+`--self` モード（`kept_path` フィールドが追加される）:
+
+```json
+{"b_root":"/data/D","path":"b/photo.jpg","reason":"self_duplicate","checksum":"ab12...","size":1234,"kept_path":"a/photo.jpg"}
+```
+
+- `kept_path`: 同一グループ内で残すファイルの相対パス（`--self` モード専用、A/B モードでは省略）
 
 ### 7.3 ファイル名ルール
 

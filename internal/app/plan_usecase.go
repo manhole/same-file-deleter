@@ -28,6 +28,7 @@ type PlanSummary struct {
 
 type PlanUseCase struct {
 	Stderr io.Writer
+	Stdout io.Writer
 }
 
 func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
@@ -127,12 +128,18 @@ func (uc PlanUseCase) runSelf(params PlanParams) (PlanSummary, error) {
 	}
 	defer writer.Abort()
 
+	// #recycle 内のファイルは常に削除候補から除外する。
+	// #recycle 外のファイルが 2 件以上あるときのみ削除候補を抽出する。
+	// 出力を決定論的にするため、keep パスで昇順ソートしてから処理する。
+	type dupGroup struct {
+		keep    domain.IndexRecord
+		deletes []domain.IndexRecord
+	}
+	var orderedGroups []dupGroup
 	for _, recs := range groups {
 		if len(recs) < 2 {
 			continue
 		}
-		// #recycle 内のファイルは常に削除候補から除外する。
-		// #recycle 外のファイルが 2 件以上あるときのみ削除候補を抽出する。
 		var outside []domain.IndexRecord
 		for _, rec := range recs {
 			if !isInRecycleBin(rec.Path) {
@@ -143,13 +150,28 @@ func (uc PlanUseCase) runSelf(params PlanParams) (PlanSummary, error) {
 			continue
 		}
 		sort.Slice(outside, func(i, j int) bool { return outside[i].Path < outside[j].Path })
-		for _, rec := range outside[1:] { // outside[0] は keep
+		orderedGroups = append(orderedGroups, dupGroup{keep: outside[0], deletes: outside[1:]})
+	}
+	sort.Slice(orderedGroups, func(i, j int) bool {
+		return orderedGroups[i].keep.Path < orderedGroups[j].keep.Path
+	})
+
+	for _, g := range orderedGroups {
+		if uc.Stdout != nil {
+			fmt.Fprintf(uc.Stdout, "group: %s [keep]\n", g.keep.Path)
+			for _, rec := range g.deletes {
+				fmt.Fprintf(uc.Stdout, "  delete: %s\n", rec.Path)
+			}
+			fmt.Fprintln(uc.Stdout)
+		}
+		for _, rec := range g.deletes {
 			plan := domain.PlanRecord{
 				BRoot:    rec.Root,
 				Path:     rec.Path,
 				Reason:   domain.PlanReasonSelfDuplicate,
 				Checksum: rec.Checksum,
 				Size:     rec.Size,
+				KeptPath: g.keep.Path,
 			}
 			if err := writer.Write(plan); err != nil {
 				return summary, fmt.Errorf("write plan record: %w", err)
