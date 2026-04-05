@@ -60,6 +60,7 @@ func runIndex(args []string) int {
 	update := fs.Bool("update", false, "reuse unchanged file checksums from existing index")
 	var excludes multiStringFlag
 	fs.Var(&excludes, "exclude", "exclude pattern (repeatable)")
+	includeAll := fs.Bool("include-all", false, "disable default excludes (e.g. .git) and scan all files")
 
 	if err := fs.Parse(args); err != nil {
 		printIndexUsage(os.Stderr)
@@ -75,10 +76,11 @@ func runIndex(args []string) int {
 		Stderr: os.Stderr,
 	}
 	summary, err := uc.Run(app.IndexParams{
-		Dir:      *dir,
-		Out:      *out,
-		Update:   *update,
-		Excludes: excludes,
+		Dir:        *dir,
+		Out:        *out,
+		Update:     *update,
+		Excludes:   excludes,
+		IncludeAll: *includeAll,
 	})
 	if err != nil {
 		return reportError(err)

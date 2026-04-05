@@ -13,10 +13,11 @@ import (
 )
 
 type IndexParams struct {
-	Dir      string
-	Out      string
-	Update   bool
-	Excludes []string
+	Dir        string
+	Out        string
+	Update     bool
+	Excludes   []string
+	IncludeAll bool
 }
 
 type IndexSummary struct {
@@ -81,7 +82,7 @@ func (uc IndexUseCase) Run(params IndexParams) (IndexSummary, error) {
 
 	// TODO: parallelize hash computation with a worker pool (runtime.NumCPU() workers).
 	// Currently runs single-threaded. See ARCHITECTURE.md §7 for the planned design.
-	err = infra.WalkFiles(absDir, params.Excludes, func(file infra.WalkFile) error {
+	err = infra.WalkFiles(absDir, params.Excludes, !params.IncludeAll, func(file infra.WalkFile) error {
 		summary.Scanned++
 		checksum := ""
 

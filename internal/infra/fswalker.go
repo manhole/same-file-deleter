@@ -16,7 +16,11 @@ type WalkFile struct {
 	MTimeNS int64
 }
 
-func WalkFiles(root string, excludes []string, onFile func(WalkFile) error, onError func(string, error)) error {
+// defaultExcludeDirs はデフォルトで除外するディレクトリ名。
+// WalkFiles の skipDefaults=true のときに適用される。
+var defaultExcludeDirs = []string{".git"}
+
+func WalkFiles(root string, excludes []string, skipDefaults bool, onFile func(WalkFile) error, onError func(string, error)) error {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolve root path: %w", err)
@@ -51,8 +55,12 @@ func WalkFiles(root string, excludes []string, onFile func(WalkFile) error, onEr
 		relPath = filepath.ToSlash(relPath)
 
 		if d.IsDir() {
-			if d.Name() == ".git" {
-				return filepath.SkipDir
+			if skipDefaults {
+				for _, name := range defaultExcludeDirs {
+					if d.Name() == name {
+						return filepath.SkipDir
+					}
+				}
 			}
 			if matchesExclude(relPath, excludes) {
 				return filepath.SkipDir
