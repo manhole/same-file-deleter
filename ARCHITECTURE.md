@@ -78,7 +78,7 @@ internal/
 
 ### 6.2 `sfd plan`
 
-**A/B比較モード（`--b` 指定時）:**
+**集合モード（`--b` 指定時）:**
 
 1. 引数検証（`--a`, `--b`, `--out` 必須）
 2. Aのindexを読み、`MatchKey` の集合を構築
@@ -120,7 +120,7 @@ internal/
 - `plan`/`apply` はストリーム処理中心で、I/O優位のため単純実装を優先。
 - メモリ使用:
   - `index --update`: 既存indexを `path` キーで保持（O(files_in_dir)）
-  - `plan` A/B比較モード: A側キー集合のみ保持（O(files_in_A)）
+  - `plan` 集合モード: A側キー集合のみ保持（O(files_in_A)）
   - `plan --match-path`: A側の `path -> IndexRecord` マップを保持（O(files_in_A)）
   - `plan --self`: A-index全体を `MatchKey -> []IndexRecord` マップとして保持（O(files_in_A)、パス文字列も含む）
 

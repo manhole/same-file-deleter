@@ -91,7 +91,7 @@ sfd index --dir /data/B --out .cache/B.checksums.jsonl
 
 checksum index fileを比較し、削除候補planを作る。3つのモードがある。
 
-**A/B比較モード**: AにあるファイルをBから削除する（パスは問わず内容が一致すれば候補にする）。
+**集合モード**: AにあるファイルをBから削除する（パスは問わず内容が一致すれば候補にする）。
 
 ```bash
 sfd plan \
@@ -121,7 +121,7 @@ sfd plan \
 
 主なオプション:
 - `--a <file>`: A側checksum index file（必須）
-- `--b <file>`: B側checksum index file（A/B比較モード・パス一致モードのみ、`--self` と排他）
+- `--b <file>`: B側checksum index file（集合モード・パス一致モードのみ、`--self` と排他）
 - `--match-path`: パス一致モード。AとBでパスが同じかつ内容も同じファイルのみを削除候補にする（`--self` と排他）
 - `--self`: 自己重複検出モード。同一チェックサム+サイズのグループからパス辞書順最小を残し残りを削除候補にする
 - `--out <path>`: plan出力（必須）
@@ -172,7 +172,7 @@ sfd apply --plan .cache/A_to_B.delete-plan.jsonl --execute
 
 ### 7.2 planレコード例
 
-A/B 比較モード:
+集合モード:
 
 ```json
 {"b_root":"/data/B","path":"sub/x.txt","reason":"checksum_match_with_A","checksum":"ab12...","size":1234}
@@ -213,7 +213,7 @@ A/B 比較モード:
 
 ### 8.2 plan処理
 
-**A/B比較モード:**
+**集合モード:**
 
 1. A-indexを読み、`(algo, checksum, size)` をキーに集合化
 2. B-indexを走査し、同キーがA集合にあれば削除候補としてplanへ出力

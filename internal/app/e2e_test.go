@@ -566,8 +566,8 @@ func TestMatchPathBasic(t *testing.T) {
 	}
 }
 
-// TestMatchPathVsABMode は --match-path と通常 A/B モードの違いを確認する。
-// 通常モードはパスが違っても内容一致で削除候補にするが、--match-path はしない。
+// TestMatchPathVsABMode は --match-path と集合モードの違いを確認する。
+// 集合モードはパスが違っても内容一致で削除候補にするが、--match-path はしない。
 func TestMatchPathVsABMode(t *testing.T) {
 	tmp := t.TempDir()
 	aDir := filepath.Join(tmp, "A")
@@ -590,7 +590,7 @@ func TestMatchPathVsABMode(t *testing.T) {
 
 	planUC := app.PlanUseCase{}
 
-	// 通常 A/B モード: パスが違っても内容一致なので1件候補になる
+	// 集合モード: パスが違っても内容一致なので1件候補になる
 	normalPlan := filepath.Join(tmp, "normal-plan.jsonl")
 	normalSummary, err := planUC.Run(app.PlanParams{
 		AIndexPath: aIndex,
@@ -665,7 +665,7 @@ func TestPlanSameFileIsError(t *testing.T) {
 
 	planUC := app.PlanUseCase{}
 
-	// 通常 A/B モード
+	// 集合モード
 	_, err := planUC.Run(app.PlanParams{
 		AIndexPath: index,
 		BIndexPath: index,
