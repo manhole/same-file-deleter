@@ -67,6 +67,7 @@ Rules:
 - Commit messages: short imperative form in English:
   - `Add architecture design for Go-based MVP`
   - `Finalize design decisions for A/B checksum workflow`
+- **One commit = one purpose.** Do not mix unrelated changes in a single commit. For example, adding a new feature and updating documentation for a different feature must be separate commits.
 - PRs should include:
   - Purpose and scope
   - Key design or behavior changes

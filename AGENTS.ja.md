@@ -64,6 +64,7 @@ AIエージェントおよび開発者向けのガイドラインです。
 ## コミット・プルリクエストガイドライン
 
 - コミットメッセージは短い命令形（英語）で記述する:
+- **1コミット = 1目的。** 無関係な変更を1つのコミットに混在させない。例えば、新機能の追加と別機能のドキュメント更新は別コミットにする。
   - `Add architecture design for Go-based MVP`
   - `Finalize design decisions for A/B checksum workflow`
 - PRには以下を含める:
