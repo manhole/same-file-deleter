@@ -33,6 +33,11 @@
    - `sfd plan --a photos.jsonl --self --out dup-plan.jsonl` でA内の重複を検出する。
    - `sfd apply --plan dup-plan.jsonl --execute` で重複ファイルを削除する。
    - 同一チェックサム+サイズのグループからパス辞書順最小のファイルを1件残し、残りを削除候補にする。
+5. **ファイル移動の中断後やフォルダコピーのバックアップ差分削除（パス一致モード）**:
+   - A/Bそれぞれに対して `sfd index --out ...` を実行する。
+   - `sfd plan --a A.jsonl --b B.jsonl --match-path --out plan.jsonl` でA・Bで同じパスかつ同じ内容のファイルを検出する。
+   - `sfd apply --plan plan.jsonl --execute` で削除する。
+   - パスが一致しても内容が違うファイル（変更済み）や、内容が一致してもパスが違うファイルは候補にならない。
 
 ## 4. スコープ
 
@@ -84,14 +89,24 @@ sfd index --dir /data/B --out .cache/B.checksums.jsonl
 
 ### 6.2 `sfd plan`
 
-checksum index fileを比較し、削除候補planを作る。2つのモードがある。
+checksum index fileを比較し、削除候補planを作る。3つのモードがある。
 
-**A/B比較モード**: AにあるファイルをBから削除する。
+**A/B比較モード**: AにあるファイルをBから削除する（パスは問わず内容が一致すれば候補にする）。
 
 ```bash
 sfd plan \
   --a .cache/A.checksums.jsonl \
   --b .cache/B.checksums.jsonl \
+  --out .cache/A_to_B.delete-plan.jsonl
+```
+
+**パス一致モード（`--match-path`）**: AとBでパスが同じかつ内容も同じファイルをBから削除する。
+
+```bash
+sfd plan \
+  --a .cache/A.checksums.jsonl \
+  --b .cache/B.checksums.jsonl \
+  --match-path \
   --out .cache/A_to_B.delete-plan.jsonl
 ```
 
@@ -106,7 +121,8 @@ sfd plan \
 
 主なオプション:
 - `--a <file>`: A側checksum index file（必須）
-- `--b <file>`: B側checksum index file（A/B比較モードのみ、`--self` と排他）
+- `--b <file>`: B側checksum index file（A/B比較モード・パス一致モードのみ、`--self` と排他）
+- `--match-path`: パス一致モード。AとBでパスが同じかつ内容も同じファイルのみを削除候補にする（`--self` と排他）
 - `--self`: 自己重複検出モード。同一チェックサム+サイズのグループからパス辞書順最小を残し残りを削除候補にする
 - `--out <path>`: plan出力（必須）
 
@@ -162,6 +178,12 @@ A/B 比較モード:
 {"b_root":"/data/B","path":"sub/x.txt","reason":"checksum_match_with_A","checksum":"ab12...","size":1234}
 ```
 
+`--match-path` モード:
+
+```json
+{"b_root":"/data/B","path":"sub/x.txt","reason":"path_and_checksum_match","checksum":"ab12...","size":1234}
+```
+
 `--self` モード（`kept_path` フィールドが追加される）:
 
 ```json
@@ -197,6 +219,13 @@ A/B 比較モード:
 2. B-indexを走査し、同キーがA集合にあれば削除候補としてplanへ出力
 3. 同一キーに該当するB側ファイルはすべてplanへ出力（ただし `#recycle` 内は除く）
 4. 統計情報を出力（対象件数、合計サイズ、スキップ件数）
+
+**パス一致モード（`--match-path`）:**
+
+1. A-indexを読み、`path` をキーにレコードをマップ化
+2. B-indexを走査し、同じ `path` がAに存在し、かつ `(algo, checksum, size)` も一致すれば削除候補としてplanへ出力
+3. `#recycle` 内は除く
+4. 統計情報を出力
 
 **自己重複検出モード（`--self`）:**
 

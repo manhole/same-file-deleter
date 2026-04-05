@@ -86,6 +86,13 @@ internal/
 4. 一致したBレコードはすべて出力（重複ファイルを含む）
 5. サマリ出力（一致件数、一致合計サイズ）
 
+**パス一致モード（`--match-path` 指定時）:**
+
+1. 引数検証（`--a`, `--b`, `--out` 必須。`--self` は禁止）
+2. Aのindexを読み、`path -> IndexRecord` のマップを構築
+3. Bのindexをストリーム読み込みし、パスがAに存在しかつ `MatchKey` も一致する行をplanへ書き出し
+4. サマリ出力
+
 **自己重複検出モード（`--self` 指定時）:**
 
 1. 引数検証（`--a`, `--out` 必須。`--b` は禁止）
@@ -114,6 +121,7 @@ internal/
 - メモリ使用:
   - `index --update`: 既存indexを `path` キーで保持（O(files_in_dir)）
   - `plan` A/B比較モード: A側キー集合のみ保持（O(files_in_A)）
+  - `plan --match-path`: A側の `path -> IndexRecord` マップを保持（O(files_in_A)）
   - `plan --self`: A-index全体を `MatchKey -> []IndexRecord` マップとして保持（O(files_in_A)、パス文字列も含む）
 
 ## 8. パス安全性

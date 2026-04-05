@@ -4,6 +4,7 @@
 運用は `index -> plan -> apply` の3ステップで行います。
 
 - **A/B比較モード**: ディレクトリAとBを比較し、Aにある内容と一致するファイルをBから削除する
+- **パス一致モード（`--match-path`）**: AとBでパスが同じかつ内容も同じファイルをBから削除する
 - **自己重複検出モード（`--self`）**: ディレクトリA内の重複ファイルを検出し、1ファイルを残して他を削除する
 
 ## インストール
@@ -38,11 +39,19 @@ sfd index --dir /path/B --out B.checksums.jsonl --update
 
 ### 2. 削除候補を作成する
 
-**A/B比較モード**: AにあるファイルをBから削除する場合
+**A/B比較モード**: AにあるファイルをBから削除する場合（パスが違っても内容が一致すれば候補になる）
 
 ```bash
 sfd plan --a A.checksums.jsonl --b B.checksums.jsonl --out delete-plan.jsonl
 ```
+
+**パス一致モード**: AとBでパスが同じかつ内容も同じファイルをBから削除する場合
+
+```bash
+sfd plan --a A.checksums.jsonl --b B.checksums.jsonl --match-path --out delete-plan.jsonl
+```
+
+ファイル移動の中断後や、フォルダのコピーバックアップから差分のないファイルを削除する場合に適しています。パスが同じでも内容が変わっているファイルは候補になりません。
 
 **自己重複検出モード**: A内の重複ファイルを削除する場合
 
