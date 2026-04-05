@@ -61,6 +61,7 @@ Rules:
 - When updating documentation, update **both** the English and Japanese versions
 - If a change is made to the English version only (e.g., quick fix), note in the Japanese file that it may be out of sync, or update it in the same commit
 - The Japanese versions are translations of the English versions — do not introduce content that exists only in one language
+- **Links between documents must preserve language.** In `.ja.md` files, links to other documentation must point to the `.ja.md` counterpart (e.g., `[DESIGN.ja.md](DESIGN.ja.md)`, not `[DESIGN.md](DESIGN.md)`). In English `.md` files, links point to other `.md` files.
 
 ## Commit and Pull Request Guidelines
 
