@@ -43,6 +43,25 @@ See [DEVELOPER.md](DEVELOPER.md) for details. Key commands:
   - Index/update behavior
   - End-to-end `index -> plan -> apply` flow
 
+## Documentation Language Policy
+
+Documentation files exist in two languages. The English version is the authoritative source of truth.
+
+| English (authoritative) | Japanese (reference) |
+|---|---|
+| `README.md` | `README.ja.md` |
+| `DESIGN.md` | `DESIGN.ja.md` |
+| `ARCHITECTURE.md` | `ARCHITECTURE.ja.md` |
+| `DEVELOPER.md` | `DEVELOPER.ja.md` |
+| `EXISTING_TOOLS.md` | `EXISTING_TOOLS.ja.md` |
+| `AGENTS.md` | `AGENTS.ja.md` |
+| `CHANGELOG.md` | `CHANGELOG.ja.md` |
+
+Rules:
+- When updating documentation, update **both** the English and Japanese versions
+- If a change is made to the English version only (e.g., quick fix), note in the Japanese file that it may be out of sync, or update it in the same commit
+- The Japanese versions are translations of the English versions — do not introduce content that exists only in one language
+
 ## Commit and Pull Request Guidelines
 
 - Commit messages: short imperative form in English:

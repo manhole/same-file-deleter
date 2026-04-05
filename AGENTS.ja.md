@@ -42,6 +42,25 @@ AIエージェントおよび開発者向けのガイドラインです。
   - index/updateの動作
   - エンドツーエンドの `index -> plan -> apply` フロー
 
+## ドキュメントの言語方針
+
+ドキュメントファイルは2言語で存在します。英語版が正 (authoritative) です。
+
+| 英語版 (正) | 日本語版 (参考) |
+|---|---|
+| `README.md` | `README.ja.md` |
+| `DESIGN.md` | `DESIGN.ja.md` |
+| `ARCHITECTURE.md` | `ARCHITECTURE.ja.md` |
+| `DEVELOPER.md` | `DEVELOPER.ja.md` |
+| `EXISTING_TOOLS.md` | `EXISTING_TOOLS.ja.md` |
+| `AGENTS.md` | `AGENTS.ja.md` |
+| `CHANGELOG.md` | `CHANGELOG.ja.md` |
+
+規則:
+- ドキュメントを更新するときは、**英語版と日本語版の両方**を更新する
+- 英語版のみを変更した場合 (緊急修正など) は、日本語版に未同期である旨を記載するか、同じコミットで更新する
+- 日本語版は英語版の翻訳であり、片方にしか存在しない内容を作らない
+
 ## コミット・プルリクエストガイドライン
 
 - コミットメッセージは短い命令形（英語）で記述する:
