@@ -90,3 +90,12 @@ fabric.properties
 !.idea/runConfigurations
 
 # End of https://www.toptal.com/developers/gitignore/api/intellij+all
+
+# Claude Code auto-memory (personal, not for sharing)
+.claude/
+
+# Temporary JSONL files (program input/output, not for committing)
+*.jsonl
+
+# Built binary (distributed via GitHub Releases, not committed)
+sfd
