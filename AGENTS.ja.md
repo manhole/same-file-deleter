@@ -18,7 +18,7 @@ AIエージェントおよび開発者向けのガイドラインです。
 
 ## ビルド・テスト・開発コマンド
 
-詳細は [DEVELOPER.md](DEVELOPER.md) を参照してください。主なコマンドは以下の通りです。
+詳細は [DEVELOPER.ja.md](DEVELOPER.ja.md) を参照してください。主なコマンドは以下の通りです。
 
 - `go build ./cmd/sfd` — CLIバイナリのビルド
 - `go run ./cmd/sfd --help` — ローカル実行

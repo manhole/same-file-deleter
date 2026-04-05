@@ -84,7 +84,7 @@ sfd apply --plan delete-plan.jsonl --execute
 
 背景や仕様を詳しく知りたい場合は、以下の順に読むことを推奨します。
 
-1. [EXISTING_TOOLS.md](EXISTING_TOOLS.md) — なぜこのツールが必要か（既存ツールとの違い）
-2. [DESIGN.md](DESIGN.md) — 機能要件・仕様の詳細
-3. [ARCHITECTURE.md](ARCHITECTURE.md) — 実装アーキテクチャ（コードを触る人向け）
-4. [DEVELOPER.md](DEVELOPER.md) — ビルド・テスト手順
+1. [EXISTING_TOOLS.ja.md](EXISTING_TOOLS.ja.md) — なぜこのツールが必要か（既存ツールとの違い）
+2. [DESIGN.ja.md](DESIGN.ja.md) — 機能要件・仕様の詳細
+3. [ARCHITECTURE.ja.md](ARCHITECTURE.ja.md) — 実装アーキテクチャ（コードを触る人向け）
+4. [DEVELOPER.ja.md](DEVELOPER.ja.md) — ビルド・テスト手順
