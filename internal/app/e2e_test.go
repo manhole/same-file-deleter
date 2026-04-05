@@ -657,6 +657,36 @@ func TestMatchPathSkipsRecycleBin(t *testing.T) {
 }
 
 // TestMatchPathWithSelfIsError は --match-path と --self の併用がエラーになることを確認する。
+// TestPlanSameFileIsError は --a と --b に同じファイルを指定したときにエラーになることを確認する。
+func TestPlanSameFileIsError(t *testing.T) {
+	tmp := t.TempDir()
+	index := filepath.Join(tmp, "A.checksums.jsonl")
+	mustWriteFile(t, index, "") // 存在するだけでよい
+
+	planUC := app.PlanUseCase{}
+
+	// 通常 A/B モード
+	_, err := planUC.Run(app.PlanParams{
+		AIndexPath: index,
+		BIndexPath: index,
+		Out:        filepath.Join(tmp, "plan.jsonl"),
+	})
+	if err == nil || !app.IsInputError(err) {
+		t.Fatalf("expected InputError when --a and --b are the same file (AB mode), got: %v", err)
+	}
+
+	// --match-path モード
+	_, err = planUC.Run(app.PlanParams{
+		AIndexPath: index,
+		BIndexPath: index,
+		Out:        filepath.Join(tmp, "plan.jsonl"),
+		MatchPath:  true,
+	})
+	if err == nil || !app.IsInputError(err) {
+		t.Fatalf("expected InputError when --a and --b are the same file (match-path mode), got: %v", err)
+	}
+}
+
 func TestMatchPathWithSelfIsError(t *testing.T) {
 	planUC := app.PlanUseCase{}
 	_, err := planUC.Run(app.PlanParams{

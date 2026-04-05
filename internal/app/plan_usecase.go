@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -54,6 +55,10 @@ func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
 
 	if strings.TrimSpace(params.BIndexPath) == "" {
 		return summary, NewInputErrorf("--b is required")
+	}
+
+	if sameFile(params.AIndexPath, params.BIndexPath) {
+		return summary, NewInputErrorf("--a and --b must not be the same file")
 	}
 
 	if params.MatchPath {
@@ -269,6 +274,17 @@ func isInRecycleBin(path string) bool {
 		}
 	}
 	return false
+}
+
+// sameFile は2つのパスが同じファイルを指すか判定する。
+// filepath.Abs で正規化した文字列を比較する。
+func sameFile(a, b string) bool {
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return absA == absB
 }
 
 func classifyIndexReadError(flagName string, err error) error {
