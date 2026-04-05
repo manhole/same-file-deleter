@@ -114,6 +114,10 @@ fabric.properties
 
 # End of https://www.toptal.com/developers/gitignore/api/intellij+all,go
 
+# Go local cache directories (should not be in the project root)
+.gocache/
+.gomodcache/
+
 # Claude Code auto-memory (personal, not for sharing)
 .claude/
 
