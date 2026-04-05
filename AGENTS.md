@@ -1,54 +1,55 @@
-# リポジトリガイドライン
+# Repository Guidelines
 
-AIエージェントおよび開発者向けのガイドラインです。
-このリポジトリでコードを変更する際は、以下の規約に従ってください。
+Guidelines for AI agents and developers.
+Follow these conventions when making changes to this repository.
 
-## プロジェクト構成とモジュール構造
+## Project Structure and Module Layout
 
-ディレクトリAとBを比較し、B側の重複ファイルを削除するGo製CLIツールです。集合モード・パス一致モード（`--match-path`）・自己重複検出モード（`--self`）の3モードがあります。
+A Go CLI tool that compares directories A and B and deletes duplicate files from B.
+Three modes are supported: set mode, path-match mode (`--match-path`), and self-dedup mode (`--self`).
 
-- `cmd/sfd/main.go`: CLIエントリーポイント（`index`, `plan`, `apply`）
-- `internal/app/`: ユースケースとコマンドレベルのオーケストレーション
-- `internal/domain/`: コアモデルと一致判定ルール
-- `internal/infra/`: ファイルシステム走査、JSONL I/O、ハッシュ計算、パス安全性
-- `internal/*/*_test.go`: 単体テストおよび結合テスト
-- `DESIGN.md`, `ARCHITECTURE.md`: 機能設計と実装設計
+- `cmd/sfd/main.go`: CLI entry point (`index`, `plan`, `apply`)
+- `internal/app/`: Use cases and command-level orchestration
+- `internal/domain/`: Core models and matching rules
+- `internal/infra/`: Filesystem scanning, JSONL I/O, hash computation, path safety
+- `internal/*/*_test.go`: Unit and integration tests
+- `DESIGN.md`, `ARCHITECTURE.md`: Functional design and implementation design
 
-新しいコードは、明確な境界変更が必要でない限り、既存の `internal/{app,domain,infra}` のレイヤ構造に従って配置してください。
+Place new code within the existing `internal/{app,domain,infra}` layer structure unless a clear boundary change is needed.
 
-## ビルド・テスト・開発コマンド
+## Build, Test, and Development Commands
 
-詳細は [DEVELOPER.md](DEVELOPER.md) を参照してください。主なコマンドは以下の通りです。
+See [DEVELOPER.md](DEVELOPER.md) for details. Key commands:
 
-- `go build ./cmd/sfd` — CLIバイナリのビルド
-- `go run ./cmd/sfd --help` — ローカル実行
-- `go test ./...` — 全テストの実行
-- `gofmt -w $(go list -f '{{.Dir}}' ./...)` — 全Goファイルのフォーマット
+- `go build ./cmd/sfd` — Build the CLI binary
+- `go run ./cmd/sfd --help` — Run locally without building
+- `go test ./...` — Run all tests
+- `gofmt -w $(go list -f '{{.Dir}}' ./...)` — Format all Go files
 
-## コーディングスタイルと命名規則
+## Coding Style and Naming Conventions
 
-- 標準Goスタイルに従い、常に `gofmt` を実行する
-- パッケージ名は小文字かつ簡潔（`app`, `domain`, `infra`）
-- ファイル名は役割で命名（例: `index_usecase.go`, `jsonl_reader.go`）
-- エラーは明示的にラップする（`fmt.Errorf("context: %w", err)`）
-- CLIの動作は決定論的かつ安全優先（`dry-run` 既定、`--execute` 明示）
+- Follow standard Go style; always run `gofmt`
+- Package names: lowercase and concise (`app`, `domain`, `infra`)
+- File names: role-based (e.g., `index_usecase.go`, `jsonl_reader.go`)
+- Wrap errors explicitly (`fmt.Errorf("context: %w", err)`)
+- CLI behavior must be deterministic and safety-first (dry-run by default, `--execute` required for deletion)
 
-## テストガイドライン
+## Testing Guidelines
 
-- Go標準の `testing` パッケージを使用する
-- テスト名は `TestXxx` 形式とし、テスト対象パッケージの近くに配置する
-- 以下の動作変更には必ずテストを追加/修正する:
-  - パス安全性（`EnsureWithinRoot`）
-  - index/updateの動作
-  - エンドツーエンドの `index -> plan -> apply` フロー
+- Use the standard Go `testing` package
+- Test names follow the `TestXxx` convention and are placed near the package under test
+- Any behavior change affecting the following must include added or updated tests:
+  - Path safety (`EnsureWithinRoot`)
+  - Index/update behavior
+  - End-to-end `index -> plan -> apply` flow
 
-## コミット・プルリクエストガイドライン
+## Commit and Pull Request Guidelines
 
-- コミットメッセージは短い命令形（英語）で記述する:
+- Commit messages: short imperative form in English:
   - `Add architecture design for Go-based MVP`
   - `Finalize design decisions for A/B checksum workflow`
-- PRには以下を含める:
-  - 目的とスコープ
-  - 主要な設計・動作変更
-  - テスト結果（`go test ./...`）
-  - リスク事項（ファイル削除、パス検証、後方互換性）
+- PRs should include:
+  - Purpose and scope
+  - Key design or behavior changes
+  - Test results (`go test ./...`)
+  - Risk items (file deletion, path validation, backward compatibility)

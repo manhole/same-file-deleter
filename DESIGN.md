@@ -1,97 +1,96 @@
-# same-file-deleter 設計書
+# same-file-deleter Design
 
-## 1. 目的
+## 1. Purpose
 
-ディレクトリAとディレクトリBを比較し、**Aに存在するファイル内容と一致するファイル**をBから削除する。
+Compare directory A and directory B, and delete from B any files whose content matches files in A.
 
-- 同じA/Bを繰り返し比較する運用を想定し、チェックサム情報をファイルとして保存・再利用することでファイル実体の再読込を減らす
-- 削除候補抽出と実削除を分離し、`plan -> dry-run -> execute` の手順で確認しながら実行できるようにする
-- 既存ツールとの位置づけの違いは `EXISTING_TOOLS.md` を参照する
+- Designed for repeated A/B comparisons: checksum data is saved to files and reused to avoid re-reading file contents
+- Deletion candidate extraction and actual deletion are separated, enabling a safe `plan -> dry-run -> execute` workflow
+- For positioning relative to existing tools, see `EXISTING_TOOLS.md`
 
-## 2. 用語
+## 2. Terminology
 
-- `checksum index file`: ディレクトリ走査結果（path/size/mtime/checksum等）を保存したファイル。
-- `plan file`: 比較結果として得られる削除候補一覧ファイル。
+- `checksum index file`: A file storing directory scan results (path, size, mtime, checksum, etc.).
+- `plan file`: A file listing deletion candidates produced by comparing two indexes.
 
-補足:
-- 一般にはこの種の索引ファイルを `manifest` と呼ぶことが多い。
-- 本設計では分かりやすさ優先で `checksum index file` を主名称とし、必要な箇所でのみ `manifest` を併記する。
+Note: This type of index file is commonly called a `manifest` in the industry.
+This design uses `checksum index file` as the primary term for clarity, with `manifest` noted where relevant.
 
-## 3. 代表ユースケース
+## 3. Representative Use Cases
 
-1. **初回運用**:
-   - A/Bそれぞれに対して `sfd index --out ...` を実行し、`sfd plan` で削除候補を作成する。
-   - `sfd apply --dry-run` で候補件数と対象パスを確認し、問題なければ `sfd apply --execute` を実行する。
-2. **同じA/Bでの再実行**:
-   - AまたはBに変更が入った後、対象ディレクトリに対して `sfd index --update` を再実行する。
-   - 未変更ファイルは既存indexのchecksumを再利用し、新規/変更ファイルだけを再ハッシュして `sfd plan` と `sfd apply` を回す。
-3. **安全重視の削除運用**:
-   - 削除対象の確定は常にplan file経由で行い、いきなり比較結果を削除へ直結しない。
-   - 実削除前にdry-runを標準手順とし、誤削除時の影響を減らす。
-4. **単一ディレクトリ内の重複削除（自己重複検出）**:
-   - `sfd index --dir ~/photos --out photos.jsonl` でインデックスを作成する。
-   - `sfd plan --a photos.jsonl --self --out dup-plan.jsonl` でA内の重複を検出する。
-   - `sfd apply --plan dup-plan.jsonl --execute` で重複ファイルを削除する。
-   - 同一チェックサム+サイズのグループからパス辞書順最小のファイルを1件残し、残りを削除候補にする。
-5. **ファイル移動の中断後やフォルダコピーのバックアップ差分削除（パス一致モード）**:
-   - A/Bそれぞれに対して `sfd index --out ...` を実行する。
-   - `sfd plan --a A.jsonl --b B.jsonl --match-path --out plan.jsonl` でA・Bで同じパスかつ同じ内容のファイルを検出する。
-   - `sfd apply --plan plan.jsonl --execute` で削除する。
-   - パスが一致しても内容が違うファイル（変更済み）や、内容が一致してもパスが違うファイルは候補にならない。
+1. **First run**:
+   - Run `sfd index --out ...` for each of A and B, then `sfd plan` to generate deletion candidates.
+   - Verify candidate count and paths with `sfd apply --dry-run`, then run `sfd apply --execute`.
+2. **Repeated runs on the same A/B**:
+   - After changes to A or B, re-run `sfd index --update` for the affected directory.
+   - Unchanged files reuse existing checksums; only new or changed files are re-hashed. Then run `sfd plan` and `sfd apply`.
+3. **Safety-first deletion**:
+   - Always route deletion decisions through a plan file; never connect comparison results directly to deletion.
+   - Make dry-run the standard step before actual deletion to minimize the impact of mistakes.
+4. **Deduplication within a single directory (self-dedup)**:
+   - `sfd index --dir ~/photos --out photos.jsonl` to build the index.
+   - `sfd plan --a photos.jsonl --self --out dup-plan.jsonl` to detect duplicates within A.
+   - `sfd apply --plan dup-plan.jsonl --execute` to delete duplicates.
+   - One file (lexicographically smallest path) is kept per group; the rest become candidates.
+5. **Removing unchanged files from a backup after an interrupted move (path-match mode)**:
+   - Run `sfd index --out ...` for each of A and B.
+   - `sfd plan --a A.jsonl --b B.jsonl --match-path --out plan.jsonl` to find files with the same path and content in both.
+   - `sfd apply --plan plan.jsonl --execute` to delete them.
+   - Files with the same path but different content (modified), or the same content but a different path, are not candidates.
 
-## 4. スコープ
+## 4. Scope
 
-- 対象: ローカルファイルシステム上の通常ファイル
-- 非対象（初期版）:
-  - リモートストレージ連携（S3等）
-  - ディレクトリ自体の削除
+- In scope: Regular files on the local filesystem
+- Out of scope (initial version):
+  - Remote storage integration (S3, etc.)
+  - Deleting directories themselves
 
-## 5. 要件
+## 5. Requirements
 
-### 5.1 機能要件
+### 5.1 Functional Requirements
 
-1. 指定ディレクトリのchecksum index fileを作成/更新できる
-2. A用とB用のchecksum index fileを比較し、B側の削除候補を抽出できる
-3. B側で一致ファイルが複数ある場合は、該当ファイルをすべて削除対象にできる
-4. plan fileを使ってファイルを削除できる
-5. 削除前にドライランで確認できる
-6. 単一ディレクトリ内の重複ファイルを検出し、1ファイルを残して他を削除候補にできる
+1. Create/update a checksum index file for a specified directory
+2. Compare checksum index files for A and B and extract deletion candidates from B
+3. If multiple files on the B side match, all of them become deletion candidates
+4. Delete files using a plan file
+5. Verify candidates with a dry run before deletion
+6. Detect duplicate files within a single directory and mark all but one per group as candidates
 
-### 5.2 非機能要件
+### 5.2 Non-functional Requirements
 
-1. 大量ファイルを扱える（メモリ使用量はファイル数に対して線形以下に抑える）
-2. 再実行時に高速（未変更ファイルは再ハッシュしない）
-3. 安全性（誤削除防止: dry-run, plan確認, パス検証）
-4. 再現性（同じindex同士なら同じplanを出力）
-5. 低コストでのクロスプラットフォーム対応（macOS優先、可能ならWindows対応）
+1. Handle large numbers of files (memory usage linear or better with file count)
+2. Fast on re-runs (no re-hashing of unchanged files)
+3. Safety (protection against accidental deletion: dry-run, plan review, path validation)
+4. Reproducibility (same indexes always produce the same plan)
+5. Low-cost cross-platform support (macOS primary, Windows if feasible)
 
-## 6. コマンド設計
+## 6. Command Design
 
-CLIコマンド名は `sfd`。
+CLI command name: `sfd`.
 
 ### 6.1 `sfd index`
 
-ディレクトリを走査してchecksum index fileを作成/更新する。
+Scan a directory and create/update a checksum index file.
 
-例:
+Example:
 ```bash
 sfd index --dir /data/A --out .cache/A.checksums.jsonl
 sfd index --dir /data/B --out .cache/B.checksums.jsonl
 ```
 
-主なオプション:
-- `--dir <path>`: 対象ディレクトリ
-- `--out <path>`: 出力ファイルパス（必須）
-- `--update`: 既存indexを読み、未変更ファイルのchecksum再利用
-- `--exclude <glob>`: 除外パターン（複数指定可）
-- `--include-all`: デフォルト除外 (`.git` 等) を無効化してすべてのファイルを対象にする
-- シンボリックリンクは常に無視する
+Key options:
+- `--dir <path>`: Target directory
+- `--out <path>`: Output file path (required)
+- `--update`: Read the existing index and reuse checksums for unchanged files
+- `--exclude <glob>`: Exclusion pattern (can be specified multiple times)
+- `--include-all`: Disable default exclusions (`.git`, etc.) and include all files
+- Symbolic links are always ignored
 
 ### 6.2 `sfd plan`
 
-checksum index fileを比較し、削除候補planを作る。3つのモードがある。
+Compare checksum index files and generate a deletion candidate plan. Three modes are available.
 
-**集合モード**: AにあるファイルをBから削除する（パスは問わず内容が一致すれば候補にする）。
+**Set mode**: Delete from B files whose content matches any file in A (regardless of path).
 
 ```bash
 sfd plan \
@@ -100,7 +99,7 @@ sfd plan \
   --out .cache/A_to_B.delete-plan.jsonl
 ```
 
-**パス一致モード（`--match-path`）**: AとBでパスが同じかつ内容も同じファイルをBから削除する。
+**Path-match mode (`--match-path`)**: Delete from B files with the same path and content as files in A.
 
 ```bash
 sfd plan \
@@ -110,7 +109,7 @@ sfd plan \
   --out .cache/A_to_B.delete-plan.jsonl
 ```
 
-**自己重複検出モード（`--self`）**: A内の重複ファイルを検出する。
+**Self-dedup mode (`--self`)**: Detect duplicate files within A.
 
 ```bash
 sfd plan \
@@ -119,185 +118,184 @@ sfd plan \
   --out .cache/A.dedup-plan.jsonl
 ```
 
-主なオプション:
-- `--a <file>`: A側checksum index file（必須）
-- `--b <file>`: B側checksum index file（集合モード・パス一致モードのみ、`--self` と排他）
-
-- `--match-path`: パス一致モード。AとBでパスが同じかつ内容も同じファイルのみを削除候補にする（`--self` と排他）
-- `--self`: 自己重複検出モード。同一チェックサム+サイズのグループからパス辞書順最小を残し残りを削除候補にする
-- `--out <path>`: plan出力（必須）
+Key options:
+- `--a <file>`: A-side checksum index file (required)
+- `--b <file>`: B-side checksum index file (set mode and path-match mode only; mutually exclusive with `--self`)
+- `--match-path`: Path-match mode. Only files with the same path and content in both A and B become candidates (mutually exclusive with `--self`)
+- `--self`: Self-dedup mode. Keeps the lexicographically smallest path per group and marks the rest as candidates
+- `--out <path>`: Plan output (required)
 
 ### 6.3 `sfd version`
 
-ビルドに埋め込まれたバージョン番号を表示する。
+Display the version number embedded at build time.
 
 ```bash
 sfd version
 ```
 
-バージョンは `git describe --tags --always` の値をビルド時に注入する。タグなしビルドでは `dev` を表示する。
+The version is injected at build time using `git describe --tags --always`. Builds without a tag display `dev`.
 
 ### 6.4 `sfd apply`
 
-planに基づき実削除する。
+Delete files according to a plan.
 
-例:
+Example:
 ```bash
 sfd apply --plan .cache/A_to_B.delete-plan.jsonl --dry-run
 sfd apply --plan .cache/A_to_B.delete-plan.jsonl --execute
 ```
 
-主なオプション:
-- `--plan <path>`: plan file
-- `--dry-run`: 削除せず一覧表示（既定）
-- `--execute`: 実削除を実行
-- `--max-delete <n>`: 削除候補がn件を超えた場合に停止（0は無制限）
+Key options:
+- `--plan <path>`: Plan file
+- `--dry-run`: List candidates without deleting (default)
+- `--execute`: Perform actual deletion
+- `--max-delete <n>`: Stop if the number of candidates exceeds n (0 = unlimited)
 
-## 7. データフォーマット
+## 7. Data Formats
 
-大量データを想定し、1行1JSONの `JSONL` を採用する。
+JSONL (one JSON object per line) is used to handle large datasets.
 
-### 7.1 checksum indexレコード例
+### 7.1 Checksum Index Record Example
 
 ```json
 {"path":"sub/x.txt","size":1234,"mtime_ns":1739420000000000000,"algo":"blake3","checksum":"ab12...","type":"file"}
 ```
 
-フィールド:
-- `path`: 走査rootからの相対パス
-- `size`: バイト数
-- `mtime_ns`: 更新時刻（ナノ秒）
-- `algo`: ハッシュ方式
-- `checksum`: ファイル内容ハッシュ
-- `type`: 現在は `file` のみ
+Fields:
+- `path`: Relative path from the scan root
+- `size`: File size in bytes
+- `mtime_ns`: Last modified time (nanoseconds)
+- `algo`: Hash algorithm
+- `checksum`: File content hash
+- `type`: Currently `file` only
 
-### 7.2 planレコード例
+### 7.2 Plan Record Examples
 
-集合モード:
+Set mode:
 
 ```json
 {"b_root":"/data/B","path":"sub/x.txt","reason":"checksum_match_with_A","checksum":"ab12...","size":1234}
 ```
 
-`--match-path` モード:
+`--match-path` mode:
 
 ```json
 {"b_root":"/data/B","path":"sub/x.txt","reason":"path_and_checksum_match","checksum":"ab12...","size":1234}
 ```
 
-`--self` モード（`kept_path` フィールドが追加される）:
+`--self` mode (includes a `kept_path` field):
 
 ```json
 {"b_root":"/data/D","path":"b/photo.jpg","reason":"self_duplicate","checksum":"ab12...","size":1234,"kept_path":"a/photo.jpg"}
 ```
 
-- `kept_path`: 同一グループ内で残すファイルの相対パス（`--self` モード専用、A/B モードでは省略）
+- `kept_path`: Relative path of the file to keep within the group (`--self` mode only; omitted in A/B modes)
 
-### 7.3 ファイル名ルール
+### 7.3 File Naming Conventions
 
-- 拡張子は `checksums.jsonl` を推奨（JSONLのみ）
-- A/Bを同一作業ディレクトリで扱う場合は `A.checksums.jsonl` / `B.checksums.jsonl` でもよい
-- 出力先は `--out` で明示指定する（必須）
+- Recommended extension: `checksums.jsonl` (JSONL only)
+- When handling A and B in the same working directory, `A.checksums.jsonl` / `B.checksums.jsonl` is also acceptable
+- Output path must be specified explicitly via `--out` (required)
 
-## 8. 処理詳細
+## 8. Processing Details
 
-### 8.1 index処理
+### 8.1 Index Processing
 
-1. ディレクトリを再帰走査
-2. 各ファイルで `path,size,mtime_ns` を取得
-3. `.git` を除外し、シンボリックリンクは無視
-4. `--update` 時は既存indexを辞書化し、`size+mtime_ns` が同一ならchecksum再利用
-5. 対象ディレクトリ内にチェックサムファイルが存在しても自動除外しない
-6. 変更/新規ファイルのみ再ハッシュ
-7. ハッシュ方式は `blake3` 固定（MVP）
-8. 新indexを出力（アトミックに置換）
+1. Recursively scan the directory
+2. Retrieve `path`, `size`, `mtime_ns` for each file
+3. Exclude `.git`; ignore symbolic links
+4. With `--update`: load the existing index as a dictionary; reuse checksums where `size+mtime_ns` match
+5. Files inside the target directory that happen to be checksum files are not automatically excluded
+6. Re-hash only changed or new files
+7. Hash algorithm: `blake3` fixed (MVP)
+8. Write the new index atomically (write to temp file, then rename)
 
-### 8.2 plan処理
+### 8.2 Plan Processing
 
-**集合モード:**
+**Set mode:**
 
-1. A-indexを読み、`(algo, checksum, size)` をキーに集合化
-2. B-indexを走査し、同キーがA集合にあれば削除候補としてplanへ出力
-3. 同一キーに該当するB側ファイルはすべてplanへ出力（ただし `#recycle` 内は除く）
-4. 統計情報を出力（対象件数、合計サイズ、スキップ件数）
+1. Read A-index; build a set keyed by `(algo, checksum, size)`
+2. Stream B-index; write each record whose key exists in A's set to the plan
+3. All matching B-side files are output (including duplicates), except those inside `#recycle`
+4. Output statistics (match count, total size, skipped count)
 
-**パス一致モード（`--match-path`）:**
+**Path-match mode (`--match-path`):**
 
-1. A-indexを読み、`path` をキーにレコードをマップ化
-2. B-indexを走査し、同じ `path` がAに存在し、かつ `(algo, checksum, size)` も一致すれば削除候補としてplanへ出力
-3. `#recycle` 内は除く
-4. 統計情報を出力
+1. Read A-index; build a map keyed by `path`
+2. Stream B-index; write each record where the `path` exists in A and `(algo, checksum, size)` also matches
+3. Exclude files inside `#recycle`
+4. Output statistics
 
-**自己重複検出モード（`--self`）:**
+**Self-dedup mode (`--self`):**
 
-1. A-indexを全ロードし、`(algo, checksum, size)` をキーにグループ化
-2. 2件以上のグループを重複と判定
-3. 各グループでパス辞書順最小のファイルを残し、残りを削除候補としてplanへ出力
-4. PlanRecordの `b_root` にはAのルートディレクトリを設定する（applyはこれを使って削除パスを構築する）
-5. 統計情報を出力
+1. Load the entire A-index; build a map of `(algo, checksum, size)` → `[]IndexRecord`
+2. Groups with 2 or more records are considered duplicates
+3. For each group, keep the file with the lexicographically smallest path and output the rest as `PlanRecord{b_root=A_root, reason="self_duplicate", kept_path=keep.Path}`
+4. Set `b_root` in PlanRecord to A's root directory (used by `apply` to construct the deletion path)
+5. Output statistics
 
-`#recycle` フォルダの扱い（Synology NAS のごみ箱）:
-- `#recycle` 内のファイルは常に削除候補にしない
-- グループ内に `#recycle` 内のファイルが含まれる場合、`#recycle` **外**のファイルが2件以上あるときのみ削除候補を抽出する
-  - 例: `#recycle`内1件 + 外1件 → 削除なし
-  - 例: `#recycle`内1件 + 外2件 → 外の1件を削除候補にする
+Handling of `#recycle` folders (Synology NAS trash):
+- Files inside `#recycle` are never made deletion candidates
+- For a group containing `#recycle` files: candidates are extracted only when there are 2 or more files **outside** `#recycle`
+  - Example: 1 inside `#recycle` + 1 outside → no deletion
+  - Example: 1 inside `#recycle` + 2 outside → 1 outside becomes a candidate
 
-### 8.3 apply処理
+### 8.3 Apply Processing
 
-1. planの各パスがBルート配下か検証（パストラバーサル防止）
-2. `--dry-run` では削除対象一覧/件数のみ表示
-3. `--execute` で削除実行（失敗は集約して最後に報告）
-4. plan作成後のファイル再checksum検証は行わない
+1. Verify that each path in the plan is under B's root (path traversal prevention)
+2. `--dry-run`: display candidate list and count only
+3. `--execute`: delete files (failures are aggregated and reported at the end)
+4. No re-checksum verification after plan creation
 
-## 9. 安全設計
+## 9. Safety Design
 
-- デフォルトは `dry-run`
-- `--execute` 明示時のみ削除
-- `plan` を人間確認可能なテキスト/JSONLで保持
-- `--max-delete` 超過時は停止
-- Bルート外のパスは即エラー
-- 削除はゴミ箱退避ではなく、通常のファイル削除を行う
+- Default: dry-run
+- Deletion only when `--execute` is explicitly specified
+- Plans are stored in human-readable JSONL
+- Stop when `--max-delete` is exceeded
+- Paths outside B's root are immediately rejected
+- Deletion is a direct file removal, not a trash/recycle bin operation
 
-## 10. パフォーマンス設計
+## 10. Performance Design
 
-- ハッシュ計算はワーカープールで並列化（CPUコア数ベース）
-- ファイル読み込みはストリーム処理
-- index比較はA側をハッシュ集合化してO(1)照合
-- 一致判定は `checksum+size`（サイズ比較は低コストの追加確認）
+- Hash computation is parallelized using a worker pool (based on CPU core count)
+- File reads use streaming
+- Index comparison uses a hash set on the A side for O(1) lookup
+- Match check uses `checksum+size` (size comparison is a low-cost additional guard)
 
-## 11. エラー処理方針
+## 11. Error Handling Policy
 
-- 1ファイルの失敗で全体停止しない（集約して終了時にサマリ）
-- 読み取り不可ファイルはエラー記録して継続し、最後に非0で終了する
-- ただしindex入出力失敗・フォーマット破損は即停止
-- 終了コード:
-  - `0`: 正常
-  - `1`: 実行時エラー（個別ファイルエラーを含む）
-  - `2`: 入力不正（オプション/フォーマット整合性）
+- A single file failure does not stop the entire run (aggregated and summarized at exit)
+- Unreadable files are logged and processing continues; exits with non-zero at the end
+- Index I/O failure or format corruption causes immediate abort
+- Exit codes:
+  - `0`: Success
+  - `1`: Runtime error (including individual file errors)
+  - `2`: Invalid input (option or format consistency error)
 
-## 12. テスト戦略
+## 12. Test Strategy
 
-1. 単体テスト
-  - checksum計算
-  - index読み書き
-  - plan判定ロジック
-2. 結合テスト
-  - A/B小規模サンプルで `index -> plan -> apply`
-  - `dry-run` と `execute` の差分検証
-3. 負荷テスト
-  - 大量小ファイル
-  - 少数巨大ファイル
+1. Unit tests
+   - Checksum computation
+   - Index read/write
+   - Plan matching logic
+2. Integration tests
+   - Small A/B samples through `index -> plan -> apply`
+   - Diff verification between `dry-run` and `execute`
+3. Load tests
+   - Large number of small files
+   - Small number of large files
 
-## 13. 最小実装（MVP）範囲
+## 13. MVP Scope
 
-1. `sfd index`（`--update` 対応）
-2. `sfd plan`（A/B固定）
-3. `sfd apply`（dry-run/execute）
+1. `sfd index` (with `--update`)
+2. `sfd plan` (A/B fixed)
+3. `sfd apply` (dry-run/execute)
 4. JSONL index/plan
 
-## 14. 将来拡張
+## 14. Future Extensions
 
-- sha256等の追加アルゴリズム対応
-- SQLite保存（より高速な差分更新）
-- 削除ではなく隔離（trash）標準化
-- TUI/GUIフロントエンド
+- Additional hash algorithms (sha256, etc.)
+- SQLite storage (faster incremental updates)
+- Standardized trash/isolation instead of direct deletion
+- TUI/GUI frontend

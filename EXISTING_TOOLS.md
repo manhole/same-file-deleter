@@ -1,31 +1,31 @@
-# 既存ツールとの違い
+# Comparison with Existing Tools
 
-## 本ツールを作る理由
+## Why this tool exists
 
-本ツールは「2ディレクトリ固定」「Aを残しBだけを削除」「比較結果をplan fileとして残す」という運用を最短で回すためのCLIである。
+This tool is a CLI designed to run the "fixed A/B", "keep A, delete only from B", "leave the comparison result as a plan file" workflow with minimal friction.
 
-- `checksums.jsonl` を明示的な成果物として扱うため、同じA/Bに対する反復実行時にファイル実体の再読込を減らしやすい
-- 既存ツールでも近い運用は組めるが、重複グループ処理や汎用スキャン機能が中心であり、本ツールが前提とするA/B削除ワークフローは第一級の操作になっていない
+- `checksums.jsonl` is treated as an explicit artifact, making it easy to avoid re-reading file contents on repeated runs against the same A/B pair
+- Existing tools can approximate this workflow, but their core focus is duplicate-group processing or general scanning, not the A/B deletion workflow that this tool treats as a first-class operation
 
-## 位置づけの違い
+## Positioning
 
-`rmlint` と `fclones` はどちらも有力な重複ファイル処理ツールだが、本ツールの目的はそれらの代替ではなく、A/B固定の削除ワークフローを単純化することにある。
+Both `rmlint` and `fclones` are capable duplicate-file tools, but this tool is not a replacement for either. Its purpose is to simplify a fixed A/B deletion workflow.
 
-| 観点 | same-file-deleter | rmlint | fclones |
+| Aspect | same-file-deleter | rmlint | fclones |
 | --- | --- | --- | --- |
-| 主目的 | Aに存在する内容と一致するファイルをBから削除する | 重複ファイルや各種filesystem lintを検出・処理する | 重複ファイル群を見つけ、削除・移動・リンク化する |
-| 比較前提データ | ディレクトリごとの `checksums.jsonl` を明示的に保存して再利用する | 主に実行時の走査結果を使う汎用スキャン型 | 主に実行時の走査結果から重複グループを作る |
-| 再実行コストの考え方 | `index --update` で未変更ファイルの再ハッシュを避ける | 高速な再走査やキャッシュ/再生はあるが、A/B別の永続index運用が中心ではない | レポートの再利用はできるが、比較の中心はその場の重複探索 |
-| 安全モデル | `plan` と `apply` を分離し、`dry-run` を既定にする | 出力形式は豊富だが、A/B固定の削除計画ファイルを中心にはしていない | `group` と `remove` を分けられるが、対象は重複グループ全体 |
-| 想定運用 | Aを基準集合、Bを削除対象として繰り返し比較する | 任意ディレクトリ群の重複や不要物を広く洗い出す | 任意ディレクトリ群から重複群を抽出し整理する |
+| Primary purpose | Delete from B files whose content matches files in A | Detect and process duplicate files and various filesystem lint | Find duplicate file groups and delete, move, or hardlink them |
+| Pre-comparison data | Explicitly saves and reuses per-directory `checksums.jsonl` | Primarily uses scan results produced at runtime | Primarily builds duplicate groups from a runtime scan |
+| Re-run cost model | `index --update` avoids re-hashing unchanged files | Fast re-scanning and some caching exist, but persistent per-directory A/B indexes are not the primary model | Report reuse is possible, but the focus is on in-session duplicate discovery |
+| Safety model | Separates `plan` and `apply`; dry-run is the default | Rich output formats, but fixed A/B deletion plan files are not central | `group` and `remove` can be separated, but the target is the full duplicate group |
+| Intended workflow | Repeatedly compare A as the reference set against B as the deletion target | Broadly scan arbitrary directories for duplicates and unwanted files | Extract duplicate groups from arbitrary directories and organize them |
 
-## 既存ツールを使う方がよいケース
+## When to use existing tools instead
 
-- 2ディレクトリ固定ではなく、広い範囲から重複ファイル群を探索したい場合
-- 削除以外に、移動、リンク化、重複ディレクトリ検出、lint検出もまとめて行いたい場合
-- 既存エコシステムの豊富な出力形式や周辺機能を優先したい場合
+- You want to search for duplicates across a broad set of directories, not a fixed A/B pair
+- You need operations other than deletion, such as moving, hardlinking, or duplicate-directory detection
+- You prefer the rich output formats and ecosystem of existing tools
 
-## 参考
+## References
 
 - `rmlint`: https://rmlint.readthedocs.io/ , https://github.com/sahib/rmlint
 - `fclones`: https://github.com/pkolaczk/fclones

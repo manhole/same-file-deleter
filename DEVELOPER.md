@@ -1,17 +1,17 @@
-# 開発者向け: same-file-deleter
+# Developer Guide: same-file-deleter
 
-このドキュメントは開発者向けに、ビルド・実行・テスト手順を説明します。
+This document covers build, run, and test procedures for developers.
 
-## go run で実行する
+## Running without building
 
-Goがある環境で、ビルドせずにソースを直接実行できます。
+If Go is installed, you can run the source directly without building:
 
 ```bash
 cd /path/to/same-file-deleter
 go run ./cmd/sfd --help
 ```
 
-## 開発時の利用フロー
+## Development workflow
 
 ```bash
 go run ./cmd/sfd index \
@@ -33,23 +33,23 @@ go run ./cmd/sfd apply \
   --plan /tmp/delete-plan.jsonl
 ```
 
-`apply` は既定でdry-run。実削除する場合は `--execute` を追加します。
+`apply` defaults to dry-run. Add `--execute` to perform actual deletion.
 
-## テストを実行する
+## Running tests
 
 ```bash
 go test ./...
 ```
 
-## コードをフォーマットする
+## Formatting code
 
 ```bash
 gofmt -w $(go list -f '{{.Dir}}' ./...)
 ```
 
-## ビルドする
+## Building
 
-git タグがバージョンの唯一の情報源です。ビルド時に自動で埋め込まれます。
+Git tags are the single source of truth for versions. The version is embedded automatically at build time.
 
 ```bash
 cd /path/to/same-file-deleter
@@ -57,30 +57,30 @@ go build -ldflags="-X main.version=$(git describe --tags --always)" ./cmd/sfd
 ./sfd version
 ```
 
-タグがない場合やタグ後にコミットがある場合は、コミットハッシュを含む文字列になります:
+If there is no tag, or if there are commits after the tag, the version string includes the commit hash:
 
 ```
-v1.2.3          ← タグと一致するコミット
-v1.2.3-3-gabc1234  ← タグ後に3コミット
-abc1234         ← タグなし
+v1.2.3              ← commit exactly at tag
+v1.2.3-3-gabc1234   ← 3 commits after tag
+abc1234             ← no tag
 ```
 
-`-ldflags` なしでビルドすると `dev` と表示されます。
+Building without `-ldflags` displays `dev`:
 
 ```bash
 go build ./cmd/sfd
 ./sfd version   # → sfd version dev
 ```
 
-## リリース手順
+## Release procedure
 
 ```bash
 git tag v1.2.3
 git push origin v1.2.3
-# あとはビルド時に git describe が v1.2.3 を返す
+# GitHub Actions will build and publish release binaries automatically
 ```
 
-生成された `sfd` バイナリを `~/bin` などに置けば、通常のコマンドとして利用できます。
+To install the built binary locally:
 
 ```bash
 mkdir -p ~/bin
@@ -88,9 +88,9 @@ mv sfd ~/bin/sfd
 ~/bin/sfd --help
 ```
 
-## 補足
+## Notes
 
-- Goバージョン: 1.22+ を推奨
-- ハッシュは blake3 固定
-- `.git` 除外、symlink 無視、dry-run既定
-- `--out` は必須
+- Go version: 1.22+ recommended
+- Hash algorithm: blake3 (fixed)
+- `.git` excluded by default, symlinks ignored, dry-run is the default
+- `--out` is required
