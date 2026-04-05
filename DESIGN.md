@@ -84,7 +84,7 @@ sfd index --dir /data/B --out .cache/B.checksums.jsonl
 - `--out <path>`: 出力ファイルパス（必須）
 - `--update`: 既存indexを読み、未変更ファイルのchecksum再利用
 - `--exclude <glob>`: 除外パターン（複数指定可）
-- `.git` は常に除外
+- `--include-all`: デフォルト除外 (`.git` 等) を無効化してすべてのファイルを対象にする
 - シンボリックリンクは常に無視する
 
 ### 6.2 `sfd plan`
@@ -122,6 +122,7 @@ sfd plan \
 主なオプション:
 - `--a <file>`: A側checksum index file（必須）
 - `--b <file>`: B側checksum index file（集合モード・パス一致モードのみ、`--self` と排他）
+
 - `--match-path`: パス一致モード。AとBでパスが同じかつ内容も同じファイルのみを削除候補にする（`--self` と排他）
 - `--self`: 自己重複検出モード。同一チェックサム+サイズのグループからパス辞書順最小を残し残りを削除候補にする
 - `--out <path>`: plan出力（必須）

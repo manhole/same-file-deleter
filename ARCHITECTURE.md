@@ -70,7 +70,7 @@ internal/
 ### 6.1 `sfd index`
 
 1. 引数検証（`--dir`, `--out` 必須）
-2. 対象ディレクトリ再帰走査（`.git` 除外、symlink無視）
+2. 対象ディレクトリ再帰走査（デフォルト除外 `.git` 適用、`--include-all` で無効化可、symlink無視）
 3. `--update` 指定時は既存indexを読み、`path -> (size, mtime_ns, checksum)` を構築
 4. `size+mtime_ns` が一致するファイルはchecksum再利用、未一致のみ再ハッシュ
 5. JSONLをテンポラリへ出力し、最後にアトミックリネーム

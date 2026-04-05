@@ -72,7 +72,8 @@ sfd apply --plan delete-plan.jsonl --execute
 
 - `apply` は既定でdry-run（削除なし）。`--execute` を明示した場合のみ削除します
 - `--max-delete <n>` を指定すると、削除候補がn件を超えた場合に停止します（誤操作防止）
-- `.git` は除外、シンボリックリンクは対象外
+- `.git` はデフォルトで除外。`sfd index --include-all` で含められる
+- シンボリックリンクは対象外
 - 一致ファイルが複数ある場合は全件を削除候補化
 
 ## 開発者向け情報
