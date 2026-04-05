@@ -17,6 +17,7 @@ type PlanParams struct {
 	BIndexPath string
 	Out        string
 	Self       bool
+	MatchPath  bool
 }
 
 type PlanSummary struct {
@@ -45,11 +46,18 @@ func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
 		if strings.TrimSpace(params.BIndexPath) != "" {
 			return summary, NewInputErrorf("--self and --b are mutually exclusive")
 		}
+		if params.MatchPath {
+			return summary, NewInputErrorf("--self and --match-path are mutually exclusive")
+		}
 		return uc.runSelf(params)
 	}
 
 	if strings.TrimSpace(params.BIndexPath) == "" {
 		return summary, NewInputErrorf("--b is required")
+	}
+
+	if params.MatchPath {
+		return uc.runMatchPath(params)
 	}
 
 	aKeys := make(map[domain.MatchKey]struct{})
@@ -85,6 +93,73 @@ func (uc PlanUseCase) Run(params PlanParams) (PlanSummary, error) {
 			BRoot:    rec.Root,
 			Path:     rec.Path,
 			Reason:   domain.PlanReasonChecksumMatchA,
+			Checksum: rec.Checksum,
+			Size:     rec.Size,
+		}
+		if err := writer.Write(plan); err != nil {
+			return fmt.Errorf("write plan record: %w", err)
+		}
+		summary.Matches++
+		summary.MatchBytes += rec.Size
+		return nil
+	})
+	if err != nil {
+		if IsInputError(err) {
+			return summary, err
+		}
+		return summary, classifyIndexReadError("--b", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		return summary, err
+	}
+	return summary, nil
+}
+
+// runMatchPath は --match-path モードの処理。
+// A と B でパスが同じ かつ checksum+size が同じファイルを B の削除候補にする。
+func (uc PlanUseCase) runMatchPath(params PlanParams) (PlanSummary, error) {
+	summary := PlanSummary{}
+
+	// A のインデックスを「パス → レコード」のマップとして読み込む
+	aByPath := make(map[string]domain.IndexRecord)
+	if err := infra.ReadIndexJSONL(params.AIndexPath, func(rec domain.IndexRecord) error {
+		summary.ARecords++
+		aByPath[rec.Path] = rec
+		return nil
+	}); err != nil {
+		return summary, classifyIndexReadError("--a", err)
+	}
+
+	writer, err := infra.NewJSONLAtomicWriter(params.Out)
+	if err != nil {
+		return summary, err
+	}
+	defer writer.Abort()
+
+	err = infra.ReadIndexJSONL(params.BIndexPath, func(rec domain.IndexRecord) error {
+		summary.BRecords++
+
+		// ① B のパスが A に存在するか
+		aRec, exists := aByPath[rec.Path]
+		if !exists {
+			return nil
+		}
+		// ② checksum+size+algo が一致するか
+		if domain.MatchKeyFromIndex(aRec) != domain.MatchKeyFromIndex(rec) {
+			return nil
+		}
+		if isInRecycleBin(rec.Path) {
+			return nil
+		}
+		if strings.TrimSpace(rec.Root) == "" {
+			return NewInputErrorf("B index record missing root for path: %s", rec.Path)
+		}
+
+		plan := domain.PlanRecord{
+			BRoot:    rec.Root,
+			Path:     rec.Path,
+			Reason:   domain.PlanReasonPathAndChecksumMatch,
 			Checksum: rec.Checksum,
 			Size:     rec.Size,
 		}

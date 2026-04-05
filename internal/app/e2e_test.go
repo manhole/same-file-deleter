@@ -486,6 +486,190 @@ func TestSelfDedupWithoutSelfAndNoBIsError(t *testing.T) {
 	}
 }
 
+// TestMatchPathBasic は --match-path の基本動作を確認する。
+// A と B でパスが同じかつ内容が同じファイルだけが削除候補になる。
+func TestMatchPathBasic(t *testing.T) {
+	tmp := t.TempDir()
+	aDir := filepath.Join(tmp, "A")
+	bDir := filepath.Join(tmp, "B")
+
+	// パス・内容ともに一致 → 削除候補
+	mustWriteFile(t, filepath.Join(aDir, "sub", "same.txt"), "same-content")
+	mustWriteFile(t, filepath.Join(bDir, "sub", "same.txt"), "same-content")
+
+	// パスが同じだが内容が違う → 削除候補にならない
+	mustWriteFile(t, filepath.Join(aDir, "modified.txt"), "version-A")
+	mustWriteFile(t, filepath.Join(bDir, "modified.txt"), "version-B")
+
+	// 内容が同じだがパスが違う → --match-path では削除候補にならない
+	mustWriteFile(t, filepath.Join(aDir, "original.txt"), "shared-content")
+	mustWriteFile(t, filepath.Join(bDir, "renamed.txt"), "shared-content")
+
+	// B にしか存在しないファイル → 削除候補にならない
+	mustWriteFile(t, filepath.Join(bDir, "b-only.txt"), "b-only")
+
+	aIndex := filepath.Join(tmp, "A.checksums.jsonl")
+	bIndex := filepath.Join(tmp, "B.checksums.jsonl")
+	planPath := filepath.Join(tmp, "plan.jsonl")
+
+	indexUC := app.IndexUseCase{}
+	if _, err := indexUC.Run(app.IndexParams{Dir: aDir, Out: aIndex}); err != nil {
+		t.Fatalf("index A failed: %v", err)
+	}
+	if _, err := indexUC.Run(app.IndexParams{Dir: bDir, Out: bIndex}); err != nil {
+		t.Fatalf("index B failed: %v", err)
+	}
+
+	planUC := app.PlanUseCase{}
+	planSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: aIndex,
+		BIndexPath: bIndex,
+		Out:        planPath,
+		MatchPath:  true,
+	})
+	if err != nil {
+		t.Fatalf("plan --match-path failed: %v", err)
+	}
+	// sub/same.txt だけが候補
+	if planSummary.Matches != 1 {
+		t.Fatalf("expected 1 match, got %d", planSummary.Matches)
+	}
+
+	// dry-run でファイルが残ることを確認
+	applyUC := app.ApplyUseCase{Stdout: &bytes.Buffer{}}
+	drySummary, err := applyUC.Run(app.ApplyParams{PlanPath: planPath, Execute: false})
+	if err != nil {
+		t.Fatalf("apply dry-run failed: %v", err)
+	}
+	if drySummary.Candidates != 1 || drySummary.Deleted != 0 {
+		t.Fatalf("unexpected dry-run summary: %+v", drySummary)
+	}
+
+	// execute で sub/same.txt だけ削除される
+	execSummary, err := applyUC.Run(app.ApplyParams{PlanPath: planPath, Execute: true})
+	if err != nil {
+		t.Fatalf("apply execute failed: %v", err)
+	}
+	if execSummary.Deleted != 1 {
+		t.Fatalf("expected 1 deleted, got %+v", execSummary)
+	}
+	if _, err := os.Stat(filepath.Join(bDir, "sub", "same.txt")); !os.IsNotExist(err) {
+		t.Fatal("sub/same.txt should be deleted")
+	}
+	// パスが同じでも内容が違うファイルは残る
+	if _, err := os.Stat(filepath.Join(bDir, "modified.txt")); err != nil {
+		t.Fatalf("modified.txt should remain: %v", err)
+	}
+	// 内容が同じでもパスが違うファイルは残る
+	if _, err := os.Stat(filepath.Join(bDir, "renamed.txt")); err != nil {
+		t.Fatalf("renamed.txt should remain: %v", err)
+	}
+}
+
+// TestMatchPathVsABMode は --match-path と通常 A/B モードの違いを確認する。
+// 通常モードはパスが違っても内容一致で削除候補にするが、--match-path はしない。
+func TestMatchPathVsABMode(t *testing.T) {
+	tmp := t.TempDir()
+	aDir := filepath.Join(tmp, "A")
+	bDir := filepath.Join(tmp, "B")
+
+	// A に only_a.txt、B に different_path.txt として同じ内容を置く
+	mustWriteFile(t, filepath.Join(aDir, "only_a.txt"), "shared-content")
+	mustWriteFile(t, filepath.Join(bDir, "different_path.txt"), "shared-content")
+
+	aIndex := filepath.Join(tmp, "A.checksums.jsonl")
+	bIndex := filepath.Join(tmp, "B.checksums.jsonl")
+
+	indexUC := app.IndexUseCase{}
+	if _, err := indexUC.Run(app.IndexParams{Dir: aDir, Out: aIndex}); err != nil {
+		t.Fatalf("index A failed: %v", err)
+	}
+	if _, err := indexUC.Run(app.IndexParams{Dir: bDir, Out: bIndex}); err != nil {
+		t.Fatalf("index B failed: %v", err)
+	}
+
+	planUC := app.PlanUseCase{}
+
+	// 通常 A/B モード: パスが違っても内容一致なので1件候補になる
+	normalPlan := filepath.Join(tmp, "normal-plan.jsonl")
+	normalSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: aIndex,
+		BIndexPath: bIndex,
+		Out:        normalPlan,
+	})
+	if err != nil {
+		t.Fatalf("normal plan failed: %v", err)
+	}
+	if normalSummary.Matches != 1 {
+		t.Fatalf("normal mode: expected 1 match, got %d", normalSummary.Matches)
+	}
+
+	// --match-path モード: パスが違うので候補なし
+	matchPlan := filepath.Join(tmp, "match-plan.jsonl")
+	matchSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: aIndex,
+		BIndexPath: bIndex,
+		Out:        matchPlan,
+		MatchPath:  true,
+	})
+	if err != nil {
+		t.Fatalf("match-path plan failed: %v", err)
+	}
+	if matchSummary.Matches != 0 {
+		t.Fatalf("match-path mode: expected 0 matches, got %d", matchSummary.Matches)
+	}
+}
+
+// TestMatchPathSkipsRecycleBin は --match-path でも #recycle 内は除外されることを確認する。
+func TestMatchPathSkipsRecycleBin(t *testing.T) {
+	tmp := t.TempDir()
+	aDir := filepath.Join(tmp, "A")
+	bDir := filepath.Join(tmp, "B")
+
+	mustWriteFile(t, filepath.Join(aDir, "#recycle", "photo.jpg"), "image-data")
+	mustWriteFile(t, filepath.Join(bDir, "#recycle", "photo.jpg"), "image-data")
+
+	aIndex := filepath.Join(tmp, "A.checksums.jsonl")
+	bIndex := filepath.Join(tmp, "B.checksums.jsonl")
+	planPath := filepath.Join(tmp, "plan.jsonl")
+
+	indexUC := app.IndexUseCase{}
+	if _, err := indexUC.Run(app.IndexParams{Dir: aDir, Out: aIndex}); err != nil {
+		t.Fatalf("index A failed: %v", err)
+	}
+	if _, err := indexUC.Run(app.IndexParams{Dir: bDir, Out: bIndex}); err != nil {
+		t.Fatalf("index B failed: %v", err)
+	}
+
+	planUC := app.PlanUseCase{}
+	planSummary, err := planUC.Run(app.PlanParams{
+		AIndexPath: aIndex,
+		BIndexPath: bIndex,
+		Out:        planPath,
+		MatchPath:  true,
+	})
+	if err != nil {
+		t.Fatalf("plan --match-path failed: %v", err)
+	}
+	if planSummary.Matches != 0 {
+		t.Fatalf("expected 0 matches (#recycle excluded), got %d", planSummary.Matches)
+	}
+}
+
+// TestMatchPathWithSelfIsError は --match-path と --self の併用がエラーになることを確認する。
+func TestMatchPathWithSelfIsError(t *testing.T) {
+	planUC := app.PlanUseCase{}
+	_, err := planUC.Run(app.PlanParams{
+		AIndexPath: "a.jsonl",
+		Out:        "plan.jsonl",
+		Self:       true,
+		MatchPath:  true,
+	})
+	if err == nil || !app.IsInputError(err) {
+		t.Fatalf("expected InputError when --self and --match-path are both set, got: %v", err)
+	}
+}
+
 func mustMkdirAll(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
