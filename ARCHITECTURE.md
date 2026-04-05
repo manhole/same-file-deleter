@@ -90,9 +90,10 @@ internal/
 
 1. 引数検証（`--a`, `--out` 必須。`--b` は禁止）
 2. Aのindexを全ロードし、`MatchKey -> []IndexRecord` のマップを構築
-3. 2件以上のグループを重複と判定
-4. 各グループでパス辞書順最小を keep とし、残りを `PlanRecord{b_root=A_root, reason="self_duplicate"}` として出力
-5. サマリ出力
+3. 各グループで `#recycle` 内ファイルを除外し、`#recycle` 外が2件以上のものを重複と判定
+4. 各グループでパス辞書順最小を keep とし、残りを `PlanRecord{b_root=A_root, reason="self_duplicate", kept_path=keep.Path}` として出力
+5. グループ一覧（keep/delete）を stdout に出力
+6. サマリ出力
 
 ### 6.3 `sfd apply`
 

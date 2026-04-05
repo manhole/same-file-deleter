@@ -110,7 +110,17 @@ sfd plan \
 - `--self`: 自己重複検出モード。同一チェックサム+サイズのグループからパス辞書順最小を残し残りを削除候補にする
 - `--out <path>`: plan出力（必須）
 
-### 6.3 `sfd apply`
+### 6.3 `sfd version`
+
+ビルドに埋め込まれたバージョン番号を表示する。
+
+```bash
+sfd version
+```
+
+バージョンは `git describe --tags --always` の値をビルド時に注入する。タグなしビルドでは `dev` を表示する。
+
+### 6.4 `sfd apply`
 
 planに基づき実削除する。
 
